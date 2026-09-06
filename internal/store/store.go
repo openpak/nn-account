@@ -148,7 +148,7 @@ func UpdatePNIDProfile(ctx context.Context, q Querier, pid int64, miiName, miiDa
 
 type NEXAccount struct {
 	PID               int64
-	OwningPID         int64
+	OwningPID         *int64 // nil = device-only provisional record (FR-2)
 	Password          string
 	AccessLevel       int32
 	ServerAccessLevel string
@@ -156,26 +156,38 @@ type NEXAccount struct {
 	DeviceType        string
 }
 
-func GetNEXAccountByPID(ctx context.Context, q Querier, pid int64) (*NEXAccount, error) {
+func (n *NEXAccount) OwningPIDOrSelf() int64 {
+	if n.OwningPID != nil {
+		return *n.OwningPID
+	}
+	return n.PID
+}
+
+func scanNEX(row pgx.Row) (*NEXAccount, error) {
 	var n NEXAccount
-	err := q.QueryRow(ctx, `SELECT pid, owning_pid, password, access_level, server_access_level, friend_code, device_type
-		FROM nex_accounts WHERE pid=$1`, pid).
-		Scan(&n.PID, &n.OwningPID, &n.Password, &n.AccessLevel, &n.ServerAccessLevel, &n.FriendCode, &n.DeviceType)
+	err := row.Scan(&n.PID, &n.OwningPID, &n.Password, &n.AccessLevel, &n.ServerAccessLevel, &n.FriendCode, &n.DeviceType)
 	if err != nil {
 		return nil, err
 	}
 	return &n, nil
 }
 
+func GetNEXAccountByPID(ctx context.Context, q Querier, pid int64) (*NEXAccount, error) {
+	return scanNEX(q.QueryRow(ctx, `SELECT pid, owning_pid, password, access_level, server_access_level, friend_code, device_type
+		FROM nex_accounts WHERE pid=$1`, pid))
+}
+
 func GetNEXAccountByOwningPID(ctx context.Context, q Querier, pid int64) (*NEXAccount, error) {
-	var n NEXAccount
-	err := q.QueryRow(ctx, `SELECT pid, owning_pid, password, access_level, server_access_level, friend_code, device_type
-		FROM nex_accounts WHERE owning_pid=$1`, pid).
-		Scan(&n.PID, &n.OwningPID, &n.Password, &n.AccessLevel, &n.ServerAccessLevel, &n.FriendCode, &n.DeviceType)
-	if err != nil {
-		return nil, err
-	}
-	return &n, nil
+	return scanNEX(q.QueryRow(ctx, `SELECT pid, owning_pid, password, access_level, server_access_level, friend_code, device_type
+		FROM nex_accounts WHERE owning_pid=$1`, pid))
+}
+
+// InsertProvisionalNEXAccount creates a device-only NEX identity (FR-2):
+// protocol records only, never treated as a user identity until claimed.
+func InsertProvisionalNEXAccount(ctx context.Context, q Querier, pid int64, password, deviceType, friendCode string) error {
+	_, err := q.Exec(ctx, `INSERT INTO nex_accounts (pid, owning_pid, password, access_level, server_access_level, friend_code, device_type)
+		VALUES ($1, NULL, $2, 0, 'prod', $3, $4)`, pid, password, friendCode, deviceType)
+	return err
 }
 
 func InsertNEXAccount(ctx context.Context, q Querier, n *NEXAccount) error {
@@ -185,39 +197,93 @@ func InsertNEXAccount(ctx context.Context, q Querier, n *NEXAccount) error {
 	return err
 }
 
+// UpdateNEXFriendCode sets the friend code on a provisional NEX account.
+func UpdateNEXFriendCode(ctx context.Context, q Querier, pid int64, friendCode string) error {
+	_, err := q.Exec(ctx, `UPDATE nex_accounts SET friend_code=$2 WHERE pid=$1`, pid, friendCode)
+	return err
+}
+
 // ---- Servers ----
 
 type Server struct {
 	GameServerID    string
-	AccessLevel     string
-	Device          string
+	AccessMode      string
+	Device          int32 // core SystemType: 1=WUP, 2=CTR
 	ClientID        string
 	ServiceName     string
-	ServiceURL      string
+	ServiceType     string
+	TitleIDs        []string
 	IP              string
+	IPList          []string
 	Port            int32
 	AESKey          string
 	MaintenanceMode bool
-	AccountName     string
-	ServiceHost     string
-	CommunityID     int64
+	HealthCheckPort *int32
 }
 
-const serverCols = `game_server_id, access_level, device, client_id, service_name, service_url, ip, port, aes_key, maintenance_mode, account_name, service_host, community_id`
+const serverCols = `game_server_id, access_mode, device, client_id, service_name, service_type,
+	title_ids, ip, ip_list, port, aes_key, maintenance_mode, health_check_port`
 
 func scanServer(row pgx.Row) (*Server, error) {
 	var s Server
-	err := row.Scan(&s.GameServerID, &s.AccessLevel, &s.Device, &s.ClientID, &s.ServiceName, &s.ServiceURL,
-		&s.IP, &s.Port, &s.AESKey, &s.MaintenanceMode, &s.AccountName, &s.ServiceHost, &s.CommunityID)
+	err := row.Scan(&s.GameServerID, &s.AccessMode, &s.Device, &s.ClientID, &s.ServiceName, &s.ServiceType,
+		&s.TitleIDs, &s.IP, &s.IPList, &s.Port, &s.AESKey, &s.MaintenanceMode, &s.HealthCheckPort)
 	if err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
-func GetServerByGameServerID(ctx context.Context, q Querier, gameServerID, accessLevel string) (*Server, error) {
+// ConnectInfo returns one address for the server: a random entry from
+// ip_list/ip (upstream getServerConnectInfo; health-check race omitted in the
+// first cut and recorded in the M0 inventory as deferred).
+func (s *Server) ConnectInfo() (string, int32) {
+	ips := make([]string, 0, len(s.IPList)+1)
+	ips = append(ips, s.IPList...)
+	if s.IP != "" {
+		ips = append(ips, s.IP)
+	}
+	if len(ips) == 0 {
+		return "0.0.0.0", 0
+	}
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	ip := ips[int(b[0])%len(ips)]
+	return ip, s.Port
+}
+
+func GetServerByGameServerID(ctx context.Context, q Querier, gameServerID, accessMode string) (*Server, error) {
 	return scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers
-		WHERE game_server_id=$1 AND access_level=$2`, gameServerID, accessLevel))
+		WHERE game_server_id=$1 AND access_mode=$2`, gameServerID, accessMode))
+}
+
+// GetServerByTitleID resolves a server by title with access-mode ordering
+// (upstream getServerByTitleID): dev sees dev>test>prod, test sees test>prod.
+func GetServerByTitleID(ctx context.Context, q Querier, titleID, accessMode string) (*Server, error) {
+	modes := AccessModeOrder(accessMode)
+	for _, mode := range modes {
+		s, err := scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers
+			WHERE $1 = ANY(title_ids) AND access_mode=$2`, titleID, mode))
+		if err == nil {
+			return s, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, pgx.ErrNoRows
+}
+
+// AccessModeOrder ports upstream accessModeOrder.
+func AccessModeOrder(mode string) []string {
+	switch mode {
+	case "dev":
+		return []string{"dev", "test", "prod"}
+	case "test":
+		return []string{"test", "prod"}
+	default:
+		return []string{"prod"}
+	}
 }
 
 // ---- Tokens ----
@@ -282,12 +348,53 @@ func GetPNIDByRefreshToken(ctx context.Context, q Querier, rawToken string) (*PN
 }
 
 // LinkDeviceToPID appends pid to the device's linked_pids (upsert device).
-func LinkDeviceToPID(ctx context.Context, q Querier, deviceID string, pid int64) error {
-	_, err := q.Exec(ctx, `INSERT INTO devices (device_id, linked_pids) VALUES ($1, ARRAY[$2::bigint])
-		ON CONFLICT (device_id) DO UPDATE SET linked_pids = (
+func LinkDeviceToPID(ctx context.Context, q Querier, fcdcertHash string, pid int64) error {
+	_, err := q.Exec(ctx, `INSERT INTO devices (fcdcert_hash, linked_pids) VALUES ($1, ARRAY[$2::bigint])
+		ON CONFLICT (fcdcert_hash) DO UPDATE SET linked_pids = (
 			SELECT array_agg(DISTINCT x) FROM unnest(devices.linked_pids || ARRAY[$2::bigint]) x)`,
-		deviceID, pid)
+		fcdcertHash, pid)
 	return err
+}
+
+// ---- Devices (NASC) ----
+
+type Device struct {
+	FcdcCertHash      string
+	Model             string
+	Serial            string
+	Environment       string
+	MacHash           string
+	AccessLevel       int32
+	ServerAccessLevel string
+	LinkedPIDs        []int64
+}
+
+func GetDeviceByCertHash(ctx context.Context, q Querier, hash string) (*Device, error) {
+	var d Device
+	err := q.QueryRow(ctx, `SELECT fcdcert_hash, model, serial, environment, mac_hash, access_level, server_access_level, linked_pids
+		FROM devices WHERE fcdcert_hash=$1`, hash).
+		Scan(&d.FcdcCertHash, &d.Model, &d.Serial, &d.Environment, &d.MacHash, &d.AccessLevel, &d.ServerAccessLevel, &d.LinkedPIDs)
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func InsertDevice(ctx context.Context, q Querier, d *Device) error {
+	_, err := q.Exec(ctx, `INSERT INTO devices (fcdcert_hash, model, serial, environment, mac_hash, linked_pids)
+		VALUES ($1,$2,$3,$4,$5,$6)`, d.FcdcCertHash, d.Model, d.Serial, d.Environment, d.MacHash, d.LinkedPIDs)
+	return err
+}
+
+func DeviceSerialMatches(d *Device, serial string) bool { return d.Serial == serial }
+
+func ContainsPID(pids []int64, pid int64) bool {
+	for _, p := range pids {
+		if p == pid {
+			return true
+		}
+	}
+	return false
 }
 
 // GeneratePID produces a random PID in the console-accepted range

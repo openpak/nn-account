@@ -25,6 +25,7 @@ import (
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/grpcv2"
+	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/store"
 )
@@ -70,9 +71,17 @@ func run() error {
 		return err
 	}
 
+	mux := http.NewServeMux()
+	nas := nnas.New(pool, core, cfg)
+	nascSrv := nasc.New(pool, core)
+	mux.Handle("/v1/api/", nas)
+	mux.Handle("/ac", nascSrv)
+	mux.Handle("/ac/", nascSrv)
+	mux.HandleFunc("/healthz", nas.ServeHTTP)
+
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPListenAddr,
-		Handler:           hostRestrict(cfg, nnas.New(pool, core, cfg)),
+		Handler:           hostRestrict(cfg, mux),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,

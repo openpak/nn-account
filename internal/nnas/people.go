@@ -75,8 +75,9 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 
 	// NEX account (separate secret domain; cryptographic randomness).
 	nexPassword := nintendoRandomPassword(16)
+	owningPID := pid
 	nex := &store.NEXAccount{
-		PID: pid, OwningPID: pid, Password: nexPassword,
+		PID: pid, OwningPID: &owningPID, Password: nexPassword,
 		AccessLevel: 0, ServerAccessLevel: "prod", DeviceType: "wiiu",
 	}
 	pnid := &store.PNID{
