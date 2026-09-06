@@ -13,26 +13,26 @@ Statuses: **required** (account v1), **deferred** (later milestone), **excluded*
 | POST `/v1/api/people` | required | 3DS/Wii U registration | Creates PNID; delegates identity policy to core |
 | GET `/v1/api/people/:username` | required | console | Duplicate-check during registration |
 | GET `/v1/api/people/@me/profile` | required | console | Profile projection; minimize fields |
-| GET `/v1/api/people/@me/devices` | required | console | Device bindings |
-| POST `/v1/api/people/@me/devices` | required | console | Device binding |
-| GET `/v1/api/people/@me/devices/owner` | required | console | |
-| GET `/v1/api/people/@me/devices/status` | required | console | |
-| PUT `/v1/api/people/@me/devices/@current/inactivate` | required | console | |
-| PUT `/v1/api/people/@me/miis/@primary` | required | console | Mii storage in adapter |
-| PUT `/v1/api/people/@me` | required | console | Profile update |
-| POST `/v1/api/people/@me/deletion` | required | console | Delegates to core delete |
+| GET `/v1/api/people/@me/devices` | required — Go | console | Header echo (ported behavior) |
+| POST `/v1/api/people/@me/devices` | required — Go | console | Profile projection |
+| GET `/v1/api/people/@me/devices/owner` | required — Go | console | Profile projection |
+| GET `/v1/api/people/@me/devices/status` | required — Go | console | |
+| PUT `/v1/api/people/@me/devices/@current/inactivate` | required — Go | console | |
+| PUT `/v1/api/people/@me/miis/@primary` | required — Go | console | Mii persisted on adapter PNID |
+| PUT `/v1/api/people/@me` | deferred | console | Profile update; consumer evidence needed for field set |
+| POST `/v1/api/people/@me/deletion` | required — Go | console | Delegates to core `RequestAccountDeletion` (FR-8 stage one) |
 | GET/PUT `/v1/api/people/@me/emails(/@primary)` | required | console | Email change; verify via core |
 | GET `/v1/api/provider/service_token/@me` | required | console | Audience-validated service tokens |
 | GET `/v1/api/provider/nex_token/@me` | required | console, nn-friends | NEX token issuance; enforce type/audience (upstream TODO) |
-| GET `/v1/api/admin/mapped_ids` | required | internal | |
-| GET `/v1/api/admin/time` | required | console | |
-| GET `/v1/api/content/agreements/:type/:region/:version` | required | console | OpenPak-authored content |
-| GET `/v1/api/content/time_zones/:countryCode/:language` | required | console | Static data |
+| GET `/v1/api/admin/mapped_ids` | required — Go | internal | |
+| GET `/v1/api/admin/time` | required — Go | console | |
+| GET `/v1/api/content/agreements/:type/:region/:version` | required — Go | console | OpenPak-authored content |
+| GET `/v1/api/content/time_zones/:countryCode/:language` | required — Go | console | Minimal valid list |
 | GET `/v1/api/support/validate/email` | required | console | |
-| PUT `/v1/api/support/email_confirmation/:pid/:code` | required | console | Delegates to core verification |
-| GET `/v1/api/support/resend_confirmation` | required | console | |
-| GET `/v1/api/support/send_confirmation/pin/:email` | required | console | |
-| GET `/v1/api/support/forgotten_password/:pid` | required | console | Delegates to core recovery |
+| PUT `/v1/api/support/email_confirmation/:pid/:code` | deferred (M4) | console settings pages | Console email-confirm flow; web journey provides verification. Will delegate to core lifecycle tokens |
+| GET `/v1/api/support/resend_confirmation` | deferred (M4) | console settings pages | Same |
+| GET `/v1/api/support/send_confirmation/pin/:email` | deferred (M4) | console settings pages | Same |
+| GET `/v1/api/support/forgotten_password/:pid` | deferred (M4) | console settings pages | Delegates to core recovery when ported |
 | GET `/v1/api/account_settings/ui/profile` | required | browser | Embedded settings page |
 | POST `/v1/api/account_settings/update` | required | browser | Delegates shared changes to core |
 | GET `/v1/api/account_settings/mii/:pid/:face` | required | browser | Mii asset |

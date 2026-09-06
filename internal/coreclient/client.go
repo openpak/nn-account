@@ -135,3 +135,13 @@ func (c *Client) VerifyAdapterCredential(ctx context.Context, namespace, account
 		CallerNamespace: namespace, Purpose: "console_login", AccountId: accountID, Secret: secret,
 	})
 }
+
+// RequestAccountDeletion delegates FR-8 stage one to the core.
+func (c *Client) RequestAccountDeletion(ctx context.Context, accountID string) error {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	_, err := c.ident.RequestAccountDeletion(rctx, &accountv1.RequestAccountDeletionRequest{
+		CallerNamespace: "wiiu", Purpose: "console_deletion", AccountId: accountID,
+	})
+	return err
+}
