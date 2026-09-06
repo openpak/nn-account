@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -450,4 +451,33 @@ func UpdatePNIDMii(ctx context.Context, q Querier, pid int64, miiName, miiData s
 	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, mii_data=$3, updated_at=now() WHERE pid=$1`,
 		pid, miiName, miiData)
 	return err
+}
+
+func GetIndependentServiceToken(ctx context.Context, q Querier, rawToken string) (clientID string, pid, titleID int64, issued, expires time.Time, err error) {
+	err = q.QueryRow(ctx, `SELECT client_id, pid, title_id, issued_at, expires_at FROM independent_service_tokens
+		WHERE token_hash=$1`, HashToken(rawToken)).Scan(&clientID, &pid, &titleID, &issued, &expires)
+	return
+}
+
+// UpdatePNIDSettings applies a partial settings update from the console
+// settings applet (adapter-owned profile fields only).
+func UpdatePNIDSettings(ctx context.Context, q Querier, pid int64, updates map[string]any) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	setClauses := make([]string, 0, len(updates))
+	args := make([]any, 0, len(updates)+1)
+	i := 1
+	for col, val := range updates {
+		setClauses = append(setClauses, col+"=$"+strconv_itoa(i))
+		args = append(args, val)
+		i++
+	}
+	args = append(args, pid)
+	_, err := q.Exec(ctx, `UPDATE pnids SET `+strings.Join(setClauses, ", ")+`, updated_at=now() WHERE pid=$`+strconv_itoa(i), args...)
+	return err
+}
+
+func strconv_itoa(n int) string {
+	return strconv.Itoa(n)
 }

@@ -52,6 +52,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/api/content/time_zones/{country}/{language}", s.handleTimeZones)
 	// Support (email confirmation subset)
 	s.mux.HandleFunc("GET /v1/api/support/validate/email", s.handleValidateEmail)
+	// Wii U account settings applet
+	s.mux.HandleFunc("GET /v1/api/account_settings/ui/profile", s.settingsAuth(s.handleSettingsProfile))
+	s.mux.HandleFunc("POST /v1/api/account_settings/update", s.settingsAuth(s.handleSettingsUpdate))
+	s.mux.HandleFunc("GET /v1/api/account_settings/mii/{pid}/{face}", s.handleSettingsMiiImage)
+	// Connection checks (console-dependency; separate hostnames upstream)
+	s.mux.HandleFunc("GET /conntest", s.handleConnTest)
+	s.mux.HandleFunc("GET /cbvc/{console}/{unknown}/{region}", s.handleCBVC)
 	// Admin
 	s.mux.HandleFunc("GET /v1/api/admin/time", s.handleTime)
 	// Health
@@ -165,6 +172,31 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"status":"ok","service":"nn-account"}`))
+}
+
+// handleConnTest ports the conntest check page (console dependency check).
+func (s *Server) handleConnTest(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html")
+	w.Header().Set("X-Organization", "Nintendo")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`<!DOCTYPE html PUBLIC "-// W3C// DTD XHTML 1.0 Transitional// EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html>
+<head>
+<title>HTML Page</title>
+</head>
+<body bgcolor="#FFFFFF">
+This is test.html page
+</body>
+</html>
+`))
+}
+
+// handleCBVC ports the 3DS browser version check: return 0 so any browser
+// connects (https://www.3dbrew.org/wiki/Internet_Browser#Forced_system-update).
+func (s *Server) handleCBVC(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("0"))
 }
 
 // handleTime ports GET /v1/api/admin/time (headers only, empty body).
