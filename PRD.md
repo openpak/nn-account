@@ -1,8 +1,10 @@
 # OpenPak Account Core and Nintendo Network Adapter: Go rewrite PRD
 
-Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`); M1 core
-implementation started in `../account` (identity, sessions, recovery, generic
-links, internal gRPC contracts, web API, tests).
+Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
+live in `../account` (identity, sessions, recovery, generic links, adapter
+credential domain, invalidation events, internal gRPC, web API; race-tested).
+M2 adapter underway: gRPC v2 contract + NNAS core routes run in Go with a
+passing end-to-end console-journey suite; NASC and remaining routes still TS.
 
 Owner: tobagin. Date: 2026-09-06.
 
