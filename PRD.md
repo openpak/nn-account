@@ -3,11 +3,14 @@
 Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
 live in `../account` (identity, sessions, recovery, generic links, adapter
 credential domain, invalidation events, internal gRPC, web API; race-tested).
-M2 adapter well advanced: gRPC v2 contract, NNAS core routes (incl. devices,
-miis, mapped_ids, content, deletion → core), and NASC /ac (LOGIN/SVCLOC,
-device-only registration) run in Go with passing end-to-end Wii U + 3DS
-journey suites; settings pages and the console email-confirm trio deferred
-to M4 (recorded in the M0 inventory).
+M2 Go surface functionally complete: gRPC v2 contract, all NNAS core routes
+(devices, miis, mapped_ids, content, deletion → core, settings applet),
+conntest/CBVC, and NASC /ac run in Go with passing end-to-end Wii U + 3DS
+journey suites and a two-binary live smoke. Deferred to M4 with recorded
+reasons: console email-confirm trio, /@me profile update, cert signature
+crypto with operator keys (docs/M0-INVENTORY.md, docs/client-testing.md).
+No console/emulator integration has been run yet; prerequisites are tracked
+in docs/client-testing.md.
 
 Owner: tobagin. Date: 2026-09-06.
 
