@@ -74,10 +74,11 @@ func run() error {
 	mux := http.NewServeMux()
 	nas := nnas.New(pool, core, cfg)
 	nascSrv := nasc.New(pool, core)
-	mux.Handle("/v1/api/", nas)
+	// nnas owns /v1/api/* plus /conntest and /cbvc; nasc owns /ac.
+	// Mount nnas at root so all of its patterns resolve.
+	mux.Handle("/", nas)
 	mux.Handle("/ac", nascSrv)
 	mux.Handle("/ac/", nascSrv)
-	mux.HandleFunc("/healthz", nas.ServeHTTP)
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPListenAddr,
