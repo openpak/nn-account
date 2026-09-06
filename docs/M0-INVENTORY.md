@@ -41,7 +41,7 @@ Statuses: **required** (account v1), **deferred** (later milestone), **excluded*
 
 | Route | Disposition | Notes |
 |---|---|---|
-| POST `/ac` (`LOGIN`, `SVCLOC` actions) | required | Request encoding, account mapping, locator/token response, errors |
+| POST `/ac` (`LOGIN`, `SVCLOC` actions) | required — Go | Go: internal/nasc. Middleware port incl. device-only registration (FR-2 provisional identities), MAC OUI list, serial checks. Cert signature crypto deferred (operator keys) |
 
 ### Web API → `account` (new OpenPak API replaces upstream)
 

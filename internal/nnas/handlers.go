@@ -134,6 +134,7 @@ func (s *Server) handleServiceToken(w http.ResponseWriter, r *http.Request, pnid
 	now := time.Now()
 	token := CreateServiceTokenFull(server.AESKey, uint64(pnid.PID), parseTitleID(titleID),
 		now.UnixMilli(), now.Add(24*time.Hour).UnixMilli())
+	_ = server.Device // system type recorded on the token row via title context
 	encoded := NintendoBase64Encode(token)
 	if err := store.InsertIndependentServiceToken(r.Context(), s.pool, encoded, clientID,
 		pnid.PID, int64(parseTitleID(titleID)), now, now.Add(24*time.Hour)); err != nil {

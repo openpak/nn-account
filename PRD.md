@@ -3,8 +3,9 @@
 Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
 live in `../account` (identity, sessions, recovery, generic links, adapter
 credential domain, invalidation events, internal gRPC, web API; race-tested).
-M2 adapter underway: gRPC v2 contract + NNAS core routes run in Go with a
-passing end-to-end console-journey suite; NASC and remaining routes still TS.
+M2 adapter well advanced: gRPC v2 contract, NNAS core routes, and NASC /ac
+(LOGIN/SVCLOC, device-only registration) run in Go with passing end-to-end
+Wii U + 3DS journey suites; settings pages and minor support routes still TS.
 
 Owner: tobagin. Date: 2026-09-06.
 

@@ -121,8 +121,8 @@ func startAdapter(t *testing.T, core *coreclient.Client) (*nnas.Server, pb.Accou
 	}
 	// Seed a game server (friends' game-server id 00003200 per PRD §3).
 	_, err = pool.Exec(context.Background(), `INSERT INTO servers
-		(game_server_id, access_level, device, client_id, service_name, ip, port, aes_key)
-		VALUES ('00003200','prod','wiiu','test-client-id','friends','127.0.0.1',60000,'0123456789abcdef0123456789abcdef')`)
+		(game_server_id, access_mode, device, client_id, service_name, title_ids, ip, port, aes_key)
+		VALUES ('00003200','prod',1,'test-client-id','friends',ARRAY['0005000010143500'],'127.0.0.1',60000,'0123456789abcdef0123456789abcdef')`)
 	if err != nil {
 		t.Fatal(err)
 	}
