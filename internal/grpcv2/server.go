@@ -119,15 +119,20 @@ func (s *Server) GetNEXPassword(ctx context.Context, req *pb.GetNEXPasswordReque
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
-	pnid, err := store.GetPNIDByPID(ctx, s.pool, nex.OwningPID)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "No NEX account found")
-	}
-	if pnid.Deleted {
-		return nil, status.Error(codes.InvalidArgument, "No NEX account found")
-	}
-	if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
-		return nil, err
+	// Device-only provisional identities have no owning PNID: no user data
+	// to expose (FR-2). Only their NEX password is resolvable by authorized
+	// services, matching upstream `owning_pid || pid` semantics.
+	if nex.OwningPID != nil {
+		pnid, err := store.GetPNIDByPID(ctx, s.pool, *nex.OwningPID)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+		}
+		if pnid.Deleted {
+			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+		}
+		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+			return nil, err
+		}
 	}
 	return &pb.GetNEXPasswordResponse{Password: nex.Password}, nil
 }
@@ -176,21 +181,27 @@ func (s *Server) ExchangeNEXTokenForUserData(ctx context.Context, req *pb.Exchan
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
-	pnid, err := store.GetPNIDByPID(ctx, s.pool, nex.OwningPID)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "Invalid token. No user found")
-	}
-	if pnid.Deleted {
-		return nil, status.Error(codes.InvalidArgument, "Invalid token. No user found")
-	}
-	if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
-		return nil, err
-	}
-	if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {
-		return nil, err
+	// Account-level permissions come from the owning identity when present;
+	// device-only records use the NEX access level (FR-2: never a user).
+	accessLevel := nex.AccessLevel
+	if nex.OwningPID != nil {
+		pnid, err := store.GetPNIDByPID(ctx, s.pool, *nex.OwningPID)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "Invalid token. No user found")
+		}
+		if pnid.Deleted {
+			return nil, status.Error(codes.InvalidArgument, "Invalid token. No user found")
+		}
+		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+			return nil, err
+		}
+		if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {
+			return nil, err
+		}
+		accessLevel = pnid.AccessLevel
 	}
 
-	owningPID := uint32(nex.OwningPID)
+	owningPID := uint32(nex.OwningPIDOrSelf())
 	resp := &pb.ExchangeNEXTokenForUserDataResponse{
 		NexAccount: &pb.NEXAccount{
 			Pid:               uint32(nex.PID),
@@ -208,8 +219,8 @@ func (s *Server) ExchangeNEXTokenForUserData(ctx context.Context, req *pb.Exchan
 			TitleId:     uint64(titleID),
 		},
 		BasicUserInfo: &pb.BasicUserInfo{
-			AccessBetaServers:      nex.AccessLevel >= 1 && pnid.AccessLevel >= 1,
-			AccessDeveloperServers: pnid.AccessLevel == 3,
+			AccessBetaServers:      accessLevel >= 1,
+			AccessDeveloperServers: accessLevel == 3,
 		},
 	}
 	return resp, nil

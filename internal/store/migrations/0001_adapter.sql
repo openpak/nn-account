@@ -23,7 +23,7 @@ CREATE TABLE pnids (
 
 CREATE TABLE nex_accounts (
     pid                 BIGINT PRIMARY KEY,    -- NEX pid (distinct identity; may equal owning_pid)
-    owning_pid          BIGINT NOT NULL REFERENCES pnids(pid),
+    owning_pid          BIGINT REFERENCES pnids(pid), -- NULL = device-only provisional record (FR-2)
     password            TEXT NOT NULL,         -- NEX-only secret (FR-1: separate domain)
     access_level        INT  NOT NULL DEFAULT 0,
     server_access_level TEXT NOT NULL DEFAULT 'prod',
@@ -34,30 +34,31 @@ CREATE TABLE nex_accounts (
 CREATE INDEX idx_nex_accounts_owning ON nex_accounts(owning_pid);
 
 CREATE TABLE devices (
-    device_id           TEXT PRIMARY KEY,      -- console certificate identifier
-    model               TEXT NOT NULL DEFAULT '',
+    fcdcert_hash        TEXT PRIMARY KEY,      -- SHA-256 (base64) of the console cert
+    model               TEXT NOT NULL DEFAULT '',  -- ctr/spr/ftr/ktr/red/jan/wiiu
     serial              TEXT NOT NULL DEFAULT '',
+    environment         TEXT NOT NULL DEFAULT '',
+    mac_hash            TEXT NOT NULL DEFAULT '',
     access_level        INT NOT NULL DEFAULT 0,
     server_access_level TEXT NOT NULL DEFAULT 'prod',
-    linked_pids         BIGINT[] NOT NULL DEFAULT '{}',
-    attributes          JSONB NOT NULL DEFAULT '{}'
+    linked_pids         BIGINT[] NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE servers (
     game_server_id      TEXT NOT NULL,
-    access_level        TEXT NOT NULL DEFAULT 'prod',
-    device              TEXT NOT NULL DEFAULT 'wiiu',
+    access_mode         TEXT NOT NULL DEFAULT 'prod' CHECK (access_mode IN ('prod','test','dev')),
+    device              INT NOT NULL DEFAULT 1,  -- core SystemType enum (1=WUP, 2=CTR)
     client_id           TEXT NOT NULL,
     service_name        TEXT NOT NULL DEFAULT '',
-    service_url         TEXT NOT NULL DEFAULT '',
+    service_type        TEXT NOT NULL DEFAULT '',
+    title_ids           TEXT[] NOT NULL DEFAULT '{}',
     ip                  TEXT NOT NULL DEFAULT '',
+    ip_list             TEXT[] NOT NULL DEFAULT '{}',
     port                INT NOT NULL DEFAULT 0,
-    aes_key             TEXT NOT NULL,          -- operator-managed secret reference
+    aes_key             TEXT NOT NULL,
     maintenance_mode    BOOLEAN NOT NULL DEFAULT FALSE,
-    account_name        TEXT NOT NULL DEFAULT '',
-    service_host        TEXT NOT NULL DEFAULT '',
-    community_id        BIGINT NOT NULL DEFAULT 0,
-    PRIMARY KEY (game_server_id, access_level)
+    health_check_port   INT,
+    PRIMARY KEY (game_server_id, access_mode)
 );
 
 -- Tokens are stored hashed; raw values exist only in responses.
