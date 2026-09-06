@@ -33,9 +33,9 @@ Statuses: **required** (account v1), **deferred** (later milestone), **excluded*
 | GET `/v1/api/support/resend_confirmation` | deferred (M4) | console settings pages | Same |
 | GET `/v1/api/support/send_confirmation/pin/:email` | deferred (M4) | console settings pages | Same |
 | GET `/v1/api/support/forgotten_password/:pid` | deferred (M4) | console settings pages | Delegates to core recovery when ported |
-| GET `/v1/api/account_settings/ui/profile` | required | browser | Embedded settings page |
-| POST `/v1/api/account_settings/update` | required | browser | Delegates shared changes to core |
-| GET `/v1/api/account_settings/mii/:pid/:face` | required | browser | Mii asset |
+| GET `/v1/api/account_settings/ui/profile` | required — Go | browser | OpenPak-authored template (functionally equivalent; upstream EJS layout not replicated) |
+| POST `/v1/api/account_settings/update` | required — Go | browser | Adapter-owned fields (mii/tz/region/country); email change deferred to core website journey (M4); no silent success |
+| GET `/v1/api/account_settings/mii/:pid/:face` | required — Go | browser | CDN proxy with 1 MiB bound |
 
 ### NASC → `nn-account`
 
@@ -58,8 +58,8 @@ Statuses: **required** (account v1), **deferred** (later milestone), **excluded*
 
 | Surface | Disposition | Notes |
 |---|---|---|
-| conntest (`/` POST) | required | Client dependency for console connect checks |
-| cbvc | required (document unsupported subroutes) | Determine client dependency |
+| conntest (`GET /`) | required — Go | Static check page (ported) |
+| cbvc (`GET /:consoleType/:unknown/:region`) | required — Go | Returns 0; no forced browser update |
 | healthz | required | Per service |
 | local-cdn `GET /*` | required | User-owned profile/Mii assets with limits |
 | datastore `/upload` | excluded | PRD §5 exclusion |
