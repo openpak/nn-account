@@ -27,6 +27,8 @@ import (
 
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
 
+	accountv1 "openpak/account/proto/openpak/account/v1"
+
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/grpcv2"
@@ -272,7 +274,42 @@ func TestAdapterConsoleJourney(t *testing.T) {
 	}
 	_ = deadCore.Close()
 
-	// --- 6. Ban blocks new authorization (core authority) ---
+	// --- 7. Devices echo + mapped_ids + deletion (FR-8 stage one) ---
+	devReq := httptest.NewRequest("GET", "/v1/api/people/@me/devices", nil)
+	devReq.Header.Set("Authorization", "Bearer "+accessToken)
+	for k, v := range map[string]string{
+		"X-Nintendo-Device-ID": "DEV123", "Accept-Language": "en",
+		"X-Nintendo-Platform-ID": "1", "X-Nintendo-Region": "US",
+		"X-Nintendo-Serial-Number": "SER1", "X-Nintendo-System-Version": "5501",
+	} {
+		devReq.Header.Set(k, v)
+	}
+	devRec := httptest.NewRecorder()
+	nnasSrv.ServeHTTP(devRec, devReq)
+	if devRec.Code != 200 || !strings.Contains(devRec.Body.String(), "<status>ACTIVE</status>") {
+		t.Fatalf("devices failed: %d %s", devRec.Code, devRec.Body.String())
+	}
+
+	mapped := httptest.NewRequest("GET", "/v1/api/admin/mapped_ids?input_type=pid&output_type=user_id&input="+pidStr, nil)
+	mappedRec := httptest.NewRecorder()
+	nnasSrv.ServeHTTP(mappedRec, mapped)
+	if !strings.Contains(mappedRec.Body.String(), "<user_id>testplayer1</user_id>") {
+		t.Fatalf("mapped_ids failed: %s", mappedRec.Body.String())
+	}
+
+	// --- 6a. Console deletion (FR-8 stage one; allowed from banned too)
+	delReq := httptest.NewRequest("POST", "/v1/api/people/@me/deletion", nil)
+	delReq.Header.Set("Authorization", "Bearer "+accessToken)
+	delRec := httptest.NewRecorder()
+	nnasSrv.ServeHTTP(delRec, delReq)
+	if delRec.Code != 200 {
+		t.Fatalf("deletion failed: %d %s", delRec.Code, delRec.Body.String())
+	}
+	acctAfter, err := core.GetAccount(ctx, pnid.AccountID)
+	if err != nil || acctAfter.GetStatus() != accountv1.AccountStatus_ACCOUNT_STATUS_DELETION_PENDING {
+		t.Fatalf("expected deletion_pending, got %+v %v", acctAfter, err)
+	}
+
 	corePool, err := pgxpool.New(ctx, coreDBURL)
 	if err != nil {
 		t.Fatal(err)
@@ -288,13 +325,14 @@ func TestAdapterConsoleJourney(t *testing.T) {
 		t.Fatalf("expected 0108 banned: %s", banned)
 	}
 
-	// Existing token also fails after ban (revalidation on use).
-	bannedTok := getXMLStatus(t, nnasSrv, "/v1/api/provider/nex_token/@me?game_server_id=00003200", accessToken, "0005000010143500")
-	if bannedTok != http.StatusBadRequest {
-		t.Fatalf("expected banned token use to fail, got %d", bannedTok)
+	// Existing token also fails after ban+deletion: local tokens were
+	// revoked at deletion, so 401 (invalid token) is the expected outcome.
+	bannedTok, bannedBody := getXMLWithCode(t, nnasSrv, "/v1/api/provider/nex_token/@me?game_server_id=00003200", accessToken, "0005000010143500")
+	if bannedTok != http.StatusUnauthorized || !strings.Contains(bannedBody, "0005") {
+		t.Fatalf("expected revoked token 401/0005, got %d %s", bannedTok, bannedBody)
 	}
 
-	// --- 7. Username availability check ---
+	// --- 8. Username availability check ---
 	dup := getXMLNoAuth(t, nnasSrv, "/v1/api/people/testplayer1")
 	if dup == http.StatusNotFound {
 		t.Fatal("existing username should be found")

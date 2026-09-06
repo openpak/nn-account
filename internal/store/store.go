@@ -444,3 +444,10 @@ func PIDsForAccount(ctx context.Context, pool *pgxpool.Pool, accountID string) (
 	}
 	return out, rows.Err()
 }
+
+// UpdatePNIDMii persists Mii name/data (Nintendo-specific profile asset).
+func UpdatePNIDMii(ctx context.Context, q Querier, pid int64, miiName, miiData string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, mii_data=$3, updated_at=now() WHERE pid=$1`,
+		pid, miiName, miiData)
+	return err
+}
