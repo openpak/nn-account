@@ -64,6 +64,12 @@ func (s *Server) handleGenerateAccessToken(w http.ResponseWriter, r *http.Reques
 			writeXMLErr(w, http.StatusBadRequest, "", "0106", "Invalid account ID or password")
 			return
 		}
+		// Active-link enforcement (review P1 #3): an unlinked console may
+		// not sign in even while its master account is healthy.
+		if _, err := s.core.GetActiveLink(r.Context(), "wiiu", strconv.FormatInt(pnid.PID, 10)); err != nil {
+			writeXMLErr(w, http.StatusBadRequest, "", "0106", "Invalid account ID or password")
+			return
+		}
 	case "refresh_token":
 		if strings.TrimSpace(refreshToken) == "" {
 			writeXMLErr(w, http.StatusBadRequest, "refresh_token", "0106", "Invalid Refresh Token")
@@ -74,10 +80,15 @@ func (s *Server) handleGenerateAccessToken(w http.ResponseWriter, r *http.Reques
 			writeXMLErr(w, http.StatusBadRequest, "refresh_token", "0106", "Invalid Refresh Token")
 			return
 		}
-		// Refresh grants must also revalidate core status (FR-7).
+		// Refresh grants must also revalidate core status AND the active
+		// link (FR-7; review P1 #3).
 		acct, err := s.core.GetAccount(r.Context(), pnid.AccountID)
 		if err != nil || acct.GetStatus() != accountv1.AccountStatus_ACCOUNT_STATUS_ACTIVE {
 			writeXMLErr(w, http.StatusBadRequest, "", "0108", "Account has been banned")
+			return
+		}
+		if _, err := s.core.GetActiveLink(r.Context(), "wiiu", strconv.FormatInt(pnid.PID, 10)); err != nil {
+			writeXMLErr(w, http.StatusBadRequest, "", "0106", "Invalid Refresh Token")
 			return
 		}
 	}

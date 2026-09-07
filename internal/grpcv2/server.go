@@ -133,6 +133,11 @@ func (s *Server) GetNEXPassword(ctx context.Context, req *pb.GetNEXPasswordReque
 		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
 			return nil, err
 		}
+		// Active-link enforcement (review P1 #3): unlinked consoles lose
+		// NEX credential access immediately.
+		if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {
+			return nil, err
+		}
 	}
 	return &pb.GetNEXPasswordResponse{Password: nex.Password}, nil
 }
@@ -152,8 +157,11 @@ func (s *Server) ExchangeNEXTokenForUserData(ctx context.Context, req *pb.Exchan
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Internal error")
 	}
-	// Audience check (PRD §3, upstream TODO resolved): the token must have
-	// been issued for exactly the requesting game server.
+	// Audience check (PRD §3, upstream TODO resolved): when the caller
+	// declares its game servers, the token must match exactly. When it does
+	// not declare any (pinned friends client sends none), the token's
+	// audience must at least be a REGISTERED game server — a token minted
+	// for a real audience cannot be replayed to invent one (review P1 #7).
 	if len(req.GetGameServerIds()) > 0 {
 		matched := false
 		for _, id := range req.GetGameServerIds() {
@@ -166,6 +174,9 @@ func (s *Server) ExchangeNEXTokenForUserData(ctx context.Context, req *pb.Exchan
 			log.Printf("nex token audience mismatch: token gs=%s requested=%v", gameServerID, req.GetGameServerIds())
 			return nil, status.Error(codes.InvalidArgument, "Invalid token")
 		}
+	} else if _, err := store.GetServerByGameServerIDAnyMode(ctx, s.pool, gameServerID); err != nil {
+		log.Printf("nex token audience unverifiable: token gs=%s is not a registered server", gameServerID)
+		return nil, status.Error(codes.InvalidArgument, "Invalid token")
 	}
 	// Wrong-type and expired tokens rejected synchronously (FR-3).
 	if !expires.After(time.Now()) {

@@ -228,6 +228,13 @@ func TestAdapterConsoleJourney(t *testing.T) {
 		t.Fatalf("nex token response bad: %s", nexXML)
 	}
 
+	// Service token issuance (review P1 #5: the stale access_level helper
+	// made this lookup fail with SQLSTATE 42703; asserted end-to-end now).
+	svcCode, svcBody := getXMLWithCode(t, nnasSrv, "/v1/api/provider/service_token/@me?client_id=test-client-id", accessToken, "0005000010143500")
+	if svcCode != 200 || !strings.Contains(svcBody, "<service_token>") {
+		t.Fatalf("service token failed: %d %s", svcCode, svcBody)
+	}
+
 	// --- 4. ExchangeNEXTokenForUserData (the friends contract) ---
 	gctx := metadata.AppendToOutgoingContext(context.Background(), "X-API-Key", "adapter-grpc-key-0123456789abcdef")
 	ex, err := v2.ExchangeNEXTokenForUserData(gctx, &pb.ExchangeNEXTokenForUserDataRequest{
@@ -333,14 +340,26 @@ func TestAdapterConsoleJourney(t *testing.T) {
 		t.Fatalf("expected revoked token 401/0005, got %d %s", bannedTok, bannedBody)
 	}
 
-	// --- 8. Username availability check ---
-	dup := getXMLNoAuth(t, nnasSrv, "/v1/api/people/testplayer1")
-	if dup == http.StatusNotFound {
-		t.Fatal("existing username should be found")
+	// --- 8. Username availability check (upstream semantics: taken=400/0100,
+	// available=empty 200; review P2 #10) ---
+	dup, dupBody := getXMLWithCode(t, nnasSrv, "/v1/api/people/testplayer1", "", "")
+	if dup != http.StatusBadRequest || !strings.Contains(dupBody, "0100") {
+		t.Fatalf("taken username must 400/0100, got %d %s", dup, dupBody)
 	}
-	free := getXMLNoAuth(t, nnasSrv, "/v1/api/people/unregistered_name")
-	if free != http.StatusNotFound {
-		t.Fatal("unknown username should 404")
+	free, freeBody := getXMLWithCode(t, nnasSrv, "/v1/api/people/unregistered_name", "", "")
+	if free != http.StatusOK || strings.Contains(freeBody, "error") {
+		t.Fatalf("available username must be empty 200, got %d %s", free, freeBody)
+	}
+
+	// --- 9. XML registration body (console format; review P1 #4) ---
+	xmlBody := `<person><user_id>xmluser1</user_id><password>consoleSecret99</password>` +
+		`<email><address>xmluser@example.com</address></email>` +
+		`<mii><name>xmluser1</mii_name><data>AAAA</data></mii>` +
+		`<country>US</country><language>en</language><region>1</region><tz_name>EST5EDT</tz_name></person>`
+	xmlBody = strings.Replace(xmlBody, "</mii_name>", "</name>", 1)
+	xmlRec := postRaw(t, nnasSrv, "/v1/api/people", xmlBody, "application/xml")
+	if !strings.Contains(xmlRec.Body.String(), "<pid>") {
+		t.Fatalf("XML registration failed: %d %s", xmlRec.Code, xmlRec.Body.String())
 	}
 
 }
@@ -411,4 +430,117 @@ func getXMLNoAuth(t *testing.T, srv http.Handler, path string) int {
 
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
+}
+
+func postRaw(t *testing.T, srv http.Handler, path, body, contentType string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", contentType)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	return rec
+}
+
+// Review P1 #3: unlinking immediately revokes adapter authorization.
+func TestUnlinkRevokesAccess(t *testing.T) {
+	core := startCore(t)
+	srv, v2, pool := startAdapter(t, core)
+
+	// Register + sign in.
+	form := strings.NewReader(strings.Join([]string{
+		"user_id=unlinkme", "password=consoleSecret99",
+		"email.address=unlinkme@example.com", "mii.name=unlinkme",
+		"mii.data=AAAA", "country=US", "language=en", "region=1", "tz_name=EST5EDT",
+	}, "&"))
+	req := httptest.NewRequest("POST", "/v1/api/people", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("registration failed: %s", rec.Body.String())
+	}
+	pidStr := between(rec.Body.String(), "<pid>", "</pid>")
+	transformed := nnas.NintendoPasswordHash("consoleSecret99", parseInt(t, pidStr))
+	oauthXML := postForm(t, srv, "/v1/api/oauth20/access_token/generate",
+		[]string{"grant_type=password", "user_id=unlinkme", "password=" + transformed})
+	accessToken := between(oauthXML, "<token>", "</token>")
+	if accessToken == "" {
+		t.Fatalf("login failed: %s", oauthXML)
+	}
+
+	// Unlink the console in the core (adapter-side unlink trigger).
+	ctx := context.Background()
+	pnid, err := store.GetPNIDByPID(ctx, pool, parseInt(t, pidStr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := core.UnlinkBySubject(ctx, "wiiu", pidStr); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+
+	// New logins fail (0106) — the active-link check fires before tokens.
+	relogin := postForm(t, srv, "/v1/api/oauth20/access_token/generate",
+		[]string{"grant_type=password", "user_id=unlinkme", "password=" + transformed})
+	if !strings.Contains(relogin, "0106") {
+		t.Fatalf("unlinked console must not sign in: %s", relogin)
+	}
+
+	// Existing tokens fail on use (bearer paths check the link).
+	code, body := getXMLWithCode(t, srv, "/v1/api/people/@me/profile", accessToken, "0005000010143500")
+	if code != http.StatusBadRequest {
+		t.Fatalf("unlinked token must fail, got %d %s", code, body)
+	}
+
+	// GetNEXPassword also refuses unlinked identities.
+	gctx := metadata.AppendToOutgoingContext(context.Background(), "X-API-Key", "adapter-grpc-key-0123456789abcdef")
+	if _, err := v2.GetNEXPassword(gctx, &pb.GetNEXPasswordRequest{Pid: uint32(pnid.PID)}); err == nil {
+		t.Fatal("unlinked identity must not resolve NEX credentials")
+	}
+}
+
+// Review P1 #7: a token whose audience is not a registered game server is
+// rejected even when the caller declares no server list.
+func TestExchangeAudienceRegistered(t *testing.T) {
+	core := startCore(t)
+	srv, v2, pool := startAdapter(t, core)
+	ctx := context.Background()
+
+	// Register a user via the adapter's NNAS handler.
+	form := strings.NewReader(strings.Join([]string{
+		"user_id=audienceuser", "password=consoleSecret99",
+		"email.address=audience@example.com", "mii.name=audienceuser",
+		"mii.data=AAAA", "country=US", "language=en", "region=1", "tz_name=EST5EDT",
+	}, "&"))
+	req := httptest.NewRequest("POST", "/v1/api/people", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("registration failed: %s", rec.Body.String())
+	}
+	pnid, err := store.GetPNIDByUsername(ctx, pool, "audienceuser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mint a NEX token bound to an UNREGISTERED game server id directly.
+	now := time.Now()
+	if err := store.InsertNEXToken(ctx, pool, "rogue-token", "9999abcd", pnid.PID, 0, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	gctx := metadata.AppendToOutgoingContext(ctx, "X-API-Key", "adapter-grpc-key-0123456789abcdef")
+	if _, err := v2.ExchangeNEXTokenForUserData(gctx, &pb.ExchangeNEXTokenForUserDataRequest{
+		Token: "rogue-token", // no GameServerIds declared
+	}); err == nil {
+		t.Fatal("unregistered audience must be rejected even with empty list")
+	}
+	// The registered server still exchanges with an empty list.
+	if err := store.InsertNEXToken(ctx, pool, "good-token", "00003200", pnid.PID, 0, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v2.ExchangeNEXTokenForUserData(gctx, &pb.ExchangeNEXTokenForUserDataRequest{
+		Token: "good-token",
+	}); err != nil {
+		t.Fatalf("registered audience with empty list must pass: %v", err)
+	}
 }
