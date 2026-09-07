@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package nn_account.resolution.v1;
+
+option go_package = "openpak/nn-account/proto/resolution/v1;resolutionv1";
+
+// Nintendo identity resolution for internal consumers (PRD §7): maps a
+// console PID to the core account it is linked to. Provided by nn-account —
+// consumers never address the core by PID.
+service Resolution {
+  rpc ResolvePid(ResolvePidRequest) returns (ResolvePidResponse);
+  // Reverse mapping for rendering friend lists (account -> PID).
+  rpc ResolveAccount(ResolveAccountRequest) returns (ResolveAccountResponse);
+}
+
+message ResolvePidRequest {
+  // Adapter namespace of the subject: "wiiu" | "3ds".
+  string namespace = 1;
+  uint32 pid = 2;
+}
+
+message ResolvePidResponse {
+  bool found = 1;
+  string account_id = 2;
+}
+
+message ResolveAccountRequest {
+  string namespace = 1;
+  string account_id = 2;
+}
+
+message ResolveAccountResponse {
+  bool found = 1;
+  uint32 pid = 2;
+}
