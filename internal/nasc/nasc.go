@@ -99,6 +99,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Resolve the NEX identity for authenticated requests.
 	var nexAccount *store.NEXAccount
 	var err error
+	ownershipProven := false
 	if pid > 0 {
 		nexAccount, err = store.GetNEXAccountByPID(ctx, s.pool, pid)
 		if err != nil || nexAccount.AccessLevel < 0 {
@@ -118,6 +119,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.writeError(w, "102")
 				return
 			}
+			// Ownership proof (review P1 #1): a claimed PID is not proof of
+			// ownership (FR-2/FR-3). A matching console credential wins;
+			// otherwise the device must already be linked to this PID.
+			if password != "" {
+				vc, verr := s.core.VerifyAdapterCredential(ctx, "wiiu", pnid.AccountID, password)
+				if verr != nil || !vc.GetValid() || vc.GetStatus() != 1 {
+					s.writeError(w, "102")
+					return
+				}
+				ownershipProven = true
+			}
+		}
+		// Provisional (device-only) identities are claimed with their
+		// client-chosen password at registration; a matching passwd proves
+		// continued control.
+		if nexAccount.OwningPID == nil && password != "" {
+			if password != nexAccount.Password {
+				s.writeError(w, "102")
+				return
+			}
+			ownershipProven = true
 		}
 	}
 
@@ -128,6 +150,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if pid > 0 && !store.ContainsPID(device.LinkedPIDs, pid) {
+			if !ownershipProven {
+				// Unknown device/PID pairing without credentials.
+				s.writeError(w, "102")
+				return
+			}
 			// System-transfer edge case (upstream): append the PID.
 			if err := store.LinkDeviceToPID(ctx, s.pool, fcdcertHash, pid); err != nil {
 				s.writeError(w, "null")
@@ -138,6 +165,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, "150") // custom upstream code: serial mismatch
 			return
 		}
+	} else if pid > 0 && !ownershipProven {
+		// Unknown device claiming a PID with no credentials (review P1 #1).
+		s.writeError(w, "102")
+		return
 	}
 
 	// Device-only registration flow for the account settings title

@@ -15,7 +15,9 @@ import (
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
 	"google.golang.org/grpc/metadata"
 
+	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/nasc"
+	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/store"
 )
 
@@ -188,4 +190,70 @@ func TestNASC3DSJourney(t *testing.T) {
 func sha256b64(b []byte) string {
 	sum := sha256.Sum256(b)
 	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+// Review P1 #1: claiming an existing PID without ownership proof fails;
+// with the correct transformed credential it succeeds.
+func TestNASCOwnershipEnforcement(t *testing.T) {
+	core := startCore(t)
+	_, v2, pool := startAdapter(t, core)
+	nascSrv := nasc.New(pool, core)
+
+	// Register a regular (NNAS) user with a known password.
+	form := strings.NewReader(strings.Join([]string{
+		"user_id=nascowner", "password=ownerPass12345",
+		"email.address=nascowner@example.com", "mii.name=nascowner",
+		"mii.data=AAAA", "country=US", "language=en", "region=1", "tz_name=EST5EDT",
+	}, "&"))
+	req := httptest.NewRequest("POST", "/v1/api/people", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	nnas.New(pool, core, &config.Config{CDNBaseURL: "https://cdn.test"}).ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("registration failed: %s", rec.Body.String())
+	}
+	pidStr := between(rec.Body.String(), "<pid>", "</pid>")
+	var ownerPID uint32
+	for _, c := range pidStr {
+		ownerPID = ownerPID*10 + uint32(c-'0')
+	}
+
+	fcdcert := make([]byte, 0x110) // zero-filled certificate
+	csnum := "C12345678"
+	macadr := "002709abcdef"
+
+	// No credentials + unknown device → 102.
+	code, body := postNASC(t, nascSrv, map[string]string{
+		"action": nenc("LOGIN"), "fcdcert": nencBytes(fcdcert), "csnum": nenc(csnum),
+		"macadr": nenc(macadr), "titleid": nenc("0005000010143500"),
+		"servertype": nenc("prod"), "gameid": nenc("00003200"),
+		"userid": nenc(itoa(int(ownerPID))),
+	})
+	if !strings.Contains(body, "returncd="+nenc("102")) {
+		t.Fatalf("credential-less LOGIN must be rejected: %d %s", code, body)
+	}
+
+	// Correct transformed credential → accepted.
+	transformed := nnas.NintendoPasswordHash("ownerPass12345", int64(ownerPID))
+	code, body = postNASC(t, nascSrv, map[string]string{
+		"action": nenc("LOGIN"), "fcdcert": nencBytes(fcdcert), "csnum": nenc(csnum),
+		"macadr": nenc(macadr), "titleid": nenc("0005000010143500"),
+		"servertype": nenc("prod"), "gameid": nenc("00003200"),
+		"userid": nenc(itoa(int(ownerPID))), "passwd": nenc(transformed),
+	})
+	if !strings.Contains(body, "returncd="+nenc("001")) {
+		t.Fatalf("credentialed LOGIN must succeed: %d %s", code, body)
+	}
+
+	// Wrong credential → 102.
+	code, body = postNASC(t, nascSrv, map[string]string{
+		"action": nenc("LOGIN"), "fcdcert": nencBytes(fcdcert), "csnum": nenc(csnum),
+		"macadr": nenc(macadr), "titleid": nenc("0005000010143500"),
+		"servertype": nenc("prod"), "gameid": nenc("00003200"),
+		"userid": nenc(itoa(int(ownerPID))), "passwd": nenc("wrongwrongwrong"),
+	})
+	if !strings.Contains(body, "returncd="+nenc("102")) {
+		t.Fatalf("wrong credential must be rejected: %d %s", code, body)
+	}
+	_ = v2
 }

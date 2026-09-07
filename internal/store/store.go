@@ -319,10 +319,20 @@ func InsertIndependentServiceToken(ctx context.Context, q Querier, rawToken, cli
 	return err
 }
 
-// RevokeTokensForPID drops all OAuth tokens for a PID (invalidation handling).
+// RevokeTokensForPID drops every token domain for a PID: OAuth,
+// independent service (settings applet), and NEX tokens (review P1 #2 —
+// deletion revocation previously left service tokens valid).
 func RevokeTokensForPID(ctx context.Context, q Querier, pid int64) error {
-	_, err := q.Exec(ctx, `DELETE FROM oauth_tokens WHERE pid=$1`, pid)
-	return err
+	for _, stmt := range []string{
+		`DELETE FROM oauth_tokens WHERE pid=$1`,
+		`DELETE FROM independent_service_tokens WHERE pid=$1`,
+		`DELETE FROM nex_tokens WHERE pid=$1`,
+	} {
+		if _, err := q.Exec(ctx, stmt, pid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func MarkEventProcessed(ctx context.Context, q Querier, version int64) error {
@@ -484,4 +494,10 @@ func strconv_itoa(n int) string {
 
 func GetPNIDByAccountID(ctx context.Context, q Querier, accountID string) (*PNID, error) {
 	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 ORDER BY pnids.pid LIMIT 1`, accountID))
+}
+
+// GetServerByGameServerIDAnyMode resolves a server regardless of access mode
+// (audience existence check on token exchange).
+func GetServerByGameServerIDAnyMode(ctx context.Context, q Querier, gameServerID string) (*Server, error) {
+	return scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers WHERE game_server_id=$1 LIMIT 1`, gameServerID))
 }

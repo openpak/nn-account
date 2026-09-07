@@ -126,34 +126,56 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 			sleepCtx(ctx, 10*time.Second)
 			continue
 		}
+		var lastProcessed int64 = int64(version)
 		page, err := core.PollEvents(ctx, uint64(version))
 		if err != nil {
 			sleepCtx(ctx, 10*time.Second)
 			continue
 		}
+		// Durable retry (review P1 #8): process in order; on the first
+		// failure STOP — the cursor stays put so the failed event (and the
+		// rest of the page) is re-delivered next tick. Revocations are
+		// idempotent, so redelivery is safe.
+		failed := false
 		for _, ev := range page.GetEvents() {
+			var applyErr error
 			switch ev.GetType() {
 			case "account_banned", "account_delete_started", "account_deleted":
-				// Map the core account to adapter PIDs via the links we know:
-				// we mirror account→pid on pnids. Revoke all local tokens.
-				pids, err := store.PIDsForAccount(ctx, pool, ev.GetAccountId())
-				if err == nil {
+				var pids []int64
+				pids, applyErr = store.PIDsForAccount(ctx, pool, ev.GetAccountId())
+				if applyErr == nil {
 					for _, pid := range pids {
-						_ = store.RevokeTokensForPID(ctx, pool, pid)
+						if applyErr = store.RevokeTokensForPID(ctx, pool, pid); applyErr != nil {
+							break
+						}
 					}
 				}
 			case "link_unlinked":
-				// Adapter credentials are namespace-scoped; the core refuses
-				// verification when the link is gone. Local tokens must go.
 				if ev.GetSubjectId() != "" {
-					if pid, err := strconvI(ev.GetSubjectId()); err == nil {
-						_ = store.RevokeTokensForPID(ctx, pool, pid)
+					var pid int64
+					if pid, applyErr = strconvI(ev.GetSubjectId()); applyErr == nil {
+						applyErr = store.RevokeTokensForPID(ctx, pool, pid)
 					}
 				}
+			case "account_unbanned":
+				// Nothing to re-arm locally; ban revocations are permanent.
+			default:
+				log.Printf("events: unknown type %q (advancing)", ev.GetType())
 			}
+			if applyErr != nil {
+				log.Printf("events: apply %s (version %d) failed, will retry: %v",
+					ev.GetType(), ev.GetVersion(), applyErr)
+				failed = true
+				break
+			}
+			lastProcessed = int64(ev.GetVersion())
+		}
+		if failed {
+			sleepCtx(ctx, 2*time.Second)
+			continue
 		}
 		if len(page.GetEvents()) > 0 {
-			if err := store.MarkEventProcessed(ctx, pool, int64(page.GetMaxVersion())); err != nil {
+			if err := store.MarkEventProcessed(ctx, pool, int64(lastProcessed)); err != nil {
 				log.Printf("events: mark processed: %v", err)
 			}
 		}

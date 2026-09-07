@@ -1,6 +1,8 @@
 package nnas
 
 import (
+	"encoding/xml"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,23 +13,35 @@ import (
 	"openpak/nn-account/internal/store"
 )
 
+// nascPerson mirrors the XML `<person>` document consoles POST to
+// /v1/api/people (upstream parses the same nested shape via its XML body
+// middleware). Flat form fields are accepted as a fallback.
+type nascPerson struct {
+	XMLName  xml.Name `xml:"person"`
+	UserID   string   `xml:"user_id"`
+	Password string   `xml:"password"`
+	Country  string   `xml:"country"`
+	Language string   `xml:"language"`
+	Region   string   `xml:"region"`
+	TZName   string   `xml:"tz_name"`
+	Email    struct {
+		Address string `xml:"address"`
+	} `xml:"email"`
+	Mii struct {
+		Name string `xml:"name"`
+		Data string `xml:"data"`
+	} `xml:"mii"`
+}
+
 // handleRegisterPerson ports POST /v1/api/people (console registration).
 // Account creation is delegated to the core (PRD FR-1); the adapter owns the
 // PNID/NEX identities and their core link.
 func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
+	userID, password, email, miiName, miiData, country, language, timezoneName, region, parseErr := s.parsePersonBody(w, r)
+	if parseErr != nil {
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
 	}
-	userID := r.FormValue("user_id")
-	password := r.FormValue("password")
-	email := strings.ToLower(r.FormValue("email.address"))
-	miiName := r.FormValue("mii.name")
-	miiData := r.FormValue("mii.data")
-	country := r.FormValue("country")
-	language := r.FormValue("language")
-	timezoneName := r.FormValue("tz_name")
-	region := r.FormValue("region")
 
 	if userID == "" || password == "" || email == "" {
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
@@ -38,6 +52,13 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 	pid, err := store.GeneratePID(r.Context(), s.pool)
 	if err != nil {
 		writeXMLErr(w, http.StatusInternalServerError, "", "1600", "Unable to process request")
+		return
+	}
+
+	// Duplicate usernames are the common failure: pre-check so the common
+	// case never creates core state (review P1 #6).
+	if _, err := store.GetPNIDByUsername(r.Context(), s.pool, userID); err == nil {
+		writeXMLErr(w, http.StatusBadRequest, "user_id", "0102", "user_id already exists")
 		return
 	}
 
@@ -95,6 +116,16 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		}
 		return store.InsertNEXAccount(ctx, tx, nex)
 	}); err != nil {
+		// Compensation (review P1 #6): the core account + link were already
+		// committed. Never leave that state orphaned — unlink the subject
+		// and start core deletion so the account is unusable and the
+		// username frees up on cleanup. Durable via core events.
+		if err := s.core.UnlinkBySubject(ctx, "wiiu", strconv.FormatInt(pid, 10)); err != nil {
+			log.Printf("[POST] /v1/api/people: COMPENSATION unlink failed for account %s: %v", accountID, err)
+		}
+		if err := s.core.RequestAccountDeletion(ctx, accountID); err != nil {
+			log.Printf("[POST] /v1/api/people: COMPENSATION deletion failed for account %s: %v", accountID, err)
+		}
 		if store.IsUniqueViolation(err) {
 			log.Printf("[POST] /v1/api/people: unique violation: %v", err)
 			writeXMLErr(w, http.StatusBadRequest, "user_id", "0102", "user_id already exists")
@@ -110,22 +141,22 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`<person><pid>` + strconv.FormatInt(pid, 10) + `</pid></person>`))
 }
 
-// handleGetPersonByUsername ports GET /v1/api/people/:username (used by
-// consoles to check NNID availability during registration).
+// handleGetPersonByUsername ports GET /v1/api/people/:username — the NNID
+// availability check. Upstream semantics (review P2 #10): AVAILABLE name →
+// empty 200; TAKEN name → 400 with error 0100 "Account ID already exists".
 func (s *Server) handleGetPersonByUsername(w http.ResponseWriter, r *http.Request) {
 	username := r.PathValue("username")
 	if username == "@me" || username == "" {
-		writeXMLErr(w, http.StatusNotFound, "", "0008", "Not Found")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	_, err := store.GetPNIDByUsername(r.Context(), s.pool, username)
 	if err != nil {
-		writeXMLErr(w, http.StatusNotFound, "", "0008", "Not Found")
+		// Available: empty success (upstream).
+		w.WriteHeader(http.StatusOK)
 		return
 	}
-	// Username exists: upstream returns a minimal person payload.
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
-	_, _ = w.Write([]byte(`<person><username>` + escapeXML(username) + `</username></person>`))
+	writeXMLErr(w, http.StatusBadRequest, "", "0100", "Account ID already exists")
 }
 
 // handleProfile ports GET /v1/api/people/@me/profile with field minimization
@@ -144,6 +175,31 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, pnid *sto
 	b.WriteString(`<flag><active>Y</active><mark_for_spam>N</mark_for_spam></flag>`)
 	b.WriteString(`</person>`)
 	_, _ = w.Write([]byte(b.String()))
+}
+
+// parsePersonBody extracts the registration document. Consoles POST XML
+// `<person>` (upstream shape); flat form encoding is accepted for tooling.
+func (s *Server) parsePersonBody(w http.ResponseWriter, r *http.Request) (userID, password, email, miiName, miiData, country, language, tzName, region string, err error) {
+	ct := r.Header.Get("Content-Type")
+	if strings.Contains(ct, "xml") {
+		body, rerr := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if rerr != nil {
+			return "", "", "", "", "", "", "", "", "", rerr
+		}
+		var person nascPerson
+		if uerr := xml.Unmarshal(body, &person); uerr != nil {
+			return "", "", "", "", "", "", "", "", "", uerr
+		}
+		return person.UserID, person.Password, strings.ToLower(person.Email.Address),
+			person.Mii.Name, person.Mii.Data, person.Country, person.Language,
+			person.TZName, person.Region, nil
+	}
+	if perr := r.ParseForm(); perr != nil {
+		return "", "", "", "", "", "", "", "", "", perr
+	}
+	return r.FormValue("user_id"), r.FormValue("password"), strings.ToLower(r.FormValue("email.address")),
+		r.FormValue("mii.name"), r.FormValue("mii.data"), r.FormValue("country"),
+		r.FormValue("language"), r.FormValue("tz_name"), r.FormValue("region"), nil
 }
 
 func defaultStr(v, def string) string {

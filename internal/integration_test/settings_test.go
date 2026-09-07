@@ -100,3 +100,69 @@ func TestAccountSettingsApplet(t *testing.T) {
 		t.Fatalf("expected 504 for bad token, got %d", badRec.Code)
 	}
 }
+
+// Review P1 #2: settings freeze the moment core deletion starts, and local
+// token revocation covers service tokens too.
+func TestSettingsFrozenAfterDeletion(t *testing.T) {
+	core := startCore(t)
+	srv, _, pool := startAdapter(t, core)
+
+	// Register (same fixture as the update test).
+	form := strings.NewReader(strings.Join([]string{
+		"user_id=frozenuser", "password=consoleSecret99",
+		"email.address=frozen@example.com", "mii.name=frozenuser",
+		"mii.data=AAAA", "country=US", "language=en", "region=1", "tz_name=EST5EDT",
+	}, "&"))
+	req := httptest.NewRequest("POST", "/v1/api/people", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	pidStr := between(rec.Body.String(), "<pid>", "</pid>")
+
+	now := time.Now()
+	if err := store.InsertIndependentServiceToken(context.Background(), pool,
+		"frozen-token", nnas.WiiUSettingsClientID(), parseInt(t, pidStr), 0, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	pageReq := httptest.NewRequest("GET", "/v1/api/account_settings/ui/profile", nil)
+	pageReq.Header.Set("X-Nintendo-Service-Token", "frozen-token")
+	pageRec := httptest.NewRecorder()
+	srv.ServeHTTP(pageRec, pageReq)
+	if pageRec.Code != 200 {
+		t.Fatalf("settings before deletion: %d", pageRec.Code)
+	}
+
+	// Start core deletion (FR-8 stage one) + local revocation (as the
+	// deletion handler does).
+	pnid, err := store.GetPNIDByUsername(context.Background(), pool, "frozenuser")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := core.RequestAccountDeletion(context.Background(), pnid.AccountID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RevokeTokensForPID(context.Background(), pool, pnid.PID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Settings are frozen: local token gone AND core status refused.
+	pageRec2 := httptest.NewRecorder()
+	srv.ServeHTTP(pageRec2, pageReq)
+	if pageRec2.Code != http.StatusGatewayTimeout {
+		t.Fatalf("settings must freeze after deletion, got %d", pageRec2.Code)
+	}
+
+	// A forgered still-valid service token is refused on core status alone.
+	if err := store.InsertIndependentServiceToken(context.Background(), pool,
+		"forged-token", nnas.WiiUSettingsClientID(), pnid.PID, 0, now, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	forgeReq := httptest.NewRequest("GET", "/v1/api/account_settings/ui/profile", nil)
+	forgeReq.Header.Set("X-Nintendo-Service-Token", "forged-token")
+	forgeRec := httptest.NewRecorder()
+	srv.ServeHTTP(forgeRec, forgeReq)
+	if forgeRec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("core status must refuse forged token, got %d", forgeRec.Code)
+	}
+}
