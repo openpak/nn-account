@@ -481,3 +481,7 @@ func UpdatePNIDSettings(ctx context.Context, q Querier, pid int64, updates map[s
 func strconv_itoa(n int) string {
 	return strconv.Itoa(n)
 }
+
+func GetPNIDByAccountID(ctx context.Context, q Querier, accountID string) (*PNID, error) {
+	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 ORDER BY pnids.pid LIMIT 1`, accountID))
+}

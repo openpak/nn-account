@@ -75,6 +75,7 @@ func startCore(t *testing.T) *coreclient.Client {
 		"ACCOUNT_DATABASE_URL="+coreDBURL,
 		"ACCOUNT_SESSION_SECRET=0123456789abcdef0123456789abcdef",
 		"ACCOUNT_INTERNAL_KEY=core-internal-key-0123456789abcdef0123",
+		"ACCOUNT_ENVIRONMENT=development",
 		"ACCOUNT_GRPC_ADDR=127.0.0.1:17071",
 		"ACCOUNT_HTTP_ADDR=127.0.0.1:17081",
 	)
