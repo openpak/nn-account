@@ -21,12 +21,14 @@ import (
 	healthv1 "google.golang.org/grpc/health/grpc_health_v1"
 
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
+	resolutionv1 "openpak/nn-account/proto/resolution/v1"
 
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/grpcv2"
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
+	"openpak/nn-account/internal/resolution"
 	"openpak/nn-account/internal/store"
 )
 
@@ -62,6 +64,7 @@ func run() error {
 	// Pretendo-compatible account gRPC v2.
 	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcv2.Interceptor(cfg.GRPCAPIKey)))
 	pb.RegisterAccountServiceServer(grpcSrv, grpcv2.New(pool, core, cfg.CDNBaseURL))
+	resolutionv1.RegisterResolutionServer(grpcSrv, resolution.New(pool, core))
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("nn-account", healthv1.HealthCheckResponse_SERVING)
 	healthv1.RegisterHealthServer(grpcSrv, healthSrv)
