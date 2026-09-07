@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -23,13 +24,21 @@ func sha256Hex(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
-// GetServerByClientID resolves a server by client ID, preferring the user's
-// access level and falling back to prod (upstream getServerByClientID).
-func GetServerByClientIDFallback(ctx context.Context, q Querier, clientID, accessLevel string) (*Server, error) {
-	if s, err := scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers WHERE client_id=$1 AND access_level=$2`, clientID, accessLevel)); err == nil {
-		return s, nil
+// GetServerByClientIDFallback resolves a server by client ID with access-
+// mode ordering (upstream getServerByClientID: dev sees dev>test>prod).
+// The servers schema column is access_mode (review P1 #5: the stale copy of
+// this helper queried a dropped access_level column, erroring 42703).
+func GetServerByClientIDFallback(ctx context.Context, q Querier, clientID, accessMode string) (*Server, error) {
+	for _, mode := range AccessModeOrder(accessMode) {
+		s, err := scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers WHERE client_id=$1 AND access_mode=$2`, clientID, mode))
+		if err == nil {
+			return s, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 	}
-	return scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers WHERE client_id=$1 AND access_level='prod'`, clientID))
+	return nil, pgx.ErrNoRows
 }
 
 // QuerierTx abstracts pgx.Tx for transactional multi-statement operations.

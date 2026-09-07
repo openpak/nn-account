@@ -64,17 +64,21 @@ func Parse(data []byte) (*Certificate, error) {
 		c.SignatureSHA256 = sha256.Sum256(data)
 		return c, nil
 	}
-	if len(data) < 0x108+1 {
-		return nil, ErrMalformed
-	}
+	// Bounds-check every slice against the declared signature type before
+	// touching data (review P2 #9: short RSA-4096 fixtures panicked).
 	sigType := binary.BigEndian.Uint32(data[0:4])
 	sizes, ok := signatureSizes[sigType]
 	if !ok {
 		return nil, ErrMalformed
 	}
+	bodyStart := 4 + sizes.Size + sizes.PaddingSize
+	// Fields occupy up to 0x108; publicKeyData follows. Require at least one
+	// byte of key material.
+	if len(data) < bodyStart+0x108+1 {
+		return nil, ErrMalformed
+	}
 	c.SignatureType = sigType
 	c.Signature = data[4 : 4+sizes.Size]
-	bodyStart := 4 + sizes.Size + sizes.PaddingSize
 	c.Body = data[bodyStart:]
 	// Upstream validity gate: signature padding must be zero.
 	for _, b := range data[4+sizes.Size : bodyStart] {

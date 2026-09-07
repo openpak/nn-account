@@ -116,6 +116,12 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, *store.PNID)
 			writeXMLErr(w, http.StatusBadRequest, "", "0108", "Account has been banned")
 			return
 		}
+		// Active-link enforcement (review P1 #3): bearer-authenticated
+		// requests require the console link to still be active.
+		if _, err := s.core.GetActiveLink(r.Context(), "wiiu", strconv.FormatInt(pnid.PID, 10)); err != nil {
+			writeXMLErr(w, http.StatusBadRequest, "", "0108", "Account has been banned")
+			return
+		}
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxPNID, pnid)), pnid)
 	}
 }

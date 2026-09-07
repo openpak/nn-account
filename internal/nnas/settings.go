@@ -33,6 +33,18 @@ func (s *Server) settingsAuth(next func(http.ResponseWriter, *http.Request, *sto
 			w.WriteHeader(http.StatusGatewayTimeout)
 			return
 		}
+		// Core authority (review P1 #2): a live local token is not
+		// permission — the account and its link must still be active
+		// (FR-7/FR-8: deletion starts → settings freeze immediately).
+		acct, err := s.core.GetAccount(r.Context(), pnid.AccountID)
+		if err != nil || acct.GetStatus() != 1 {
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
+		if _, err := s.core.GetActiveLink(r.Context(), "wiiu", strconv.FormatInt(pnid.PID, 10)); err != nil {
+			w.WriteHeader(http.StatusGatewayTimeout)
+			return
+		}
 		next(w, r, pnid)
 	}
 }

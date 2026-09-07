@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	accountv1 "openpak/account/proto/openpak/account/v1"
 )
@@ -62,12 +64,29 @@ func (c *Client) GetAccount(ctx context.Context, accountID string) (*accountv1.G
 }
 
 // GetActiveLink returns the core link for this adapter's subject, requiring
-// state ACTIVE. Fail-closed on any error.
+// state ACTIVE. Fail-closed on any error. Probes both adapter namespaces:
+// accounts register under "wiiu" via NNAS but may sign in from a 3DS.
 func (c *Client) GetActiveLink(ctx context.Context, namespace, subjectID string) (*accountv1.GetLinkBySubjectResponse, error) {
 	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
 	defer cancel()
 	resp, err := c.links.GetLinkBySubject(rctx, &accountv1.GetLinkBySubjectRequest{
 		Namespace: namespace, SubjectId: subjectID,
+	})
+	if err == nil {
+		if resp.State != accountv1.LinkState_LINK_STATE_ACTIVE {
+			return nil, errors.New("link not active")
+		}
+		return resp, nil
+	}
+	if status.Code(err) != codes.NotFound {
+		return nil, err
+	}
+	other := "wiiu"
+	if namespace == "wiiu" {
+		other = "3ds"
+	}
+	resp, err = c.links.GetLinkBySubject(rctx, &accountv1.GetLinkBySubjectRequest{
+		Namespace: other, SubjectId: subjectID,
 	})
 	if err != nil {
 		return nil, err
@@ -76,6 +95,23 @@ func (c *Client) GetActiveLink(ctx context.Context, namespace, subjectID string)
 		return nil, errors.New("link not active")
 	}
 	return resp, nil
+}
+
+// UnlinkBySubject revokes the link for a subject (registration
+// compensation; PRD §7 recovery).
+func (c *Client) UnlinkBySubject(ctx context.Context, namespace, subjectID string) error {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	resp, err := c.links.GetLinkBySubject(rctx, &accountv1.GetLinkBySubjectRequest{
+		Namespace: namespace, SubjectId: subjectID,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = c.links.UnlinkLink(rctx, &accountv1.UnlinkLinkRequest{
+		LinkId: resp.GetLinkId(), IdempotencyKey: "compensation-" + subjectID,
+	})
+	return err
 }
 
 // ReserveAndActivateLink registers a newly created adapter subject with the
