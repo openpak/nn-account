@@ -3,7 +3,9 @@
 Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
 live in `../account` (identity, sessions, recovery, generic links, adapter
 credential domain, invalidation events, internal gRPC, web API; race-tested).
-M2 Go surface functionally complete: gRPC v2 contract, all NNAS core routes
+M3 core integration landed: friends rewires friendship/request/block state
+to the core via coregraph (adapter Resolution service for PID<->account),
+verified end-to-end against live core+adapter. M2 Go surface complete: gRPC v2 contract, all NNAS core routes
 (devices, miis, mapped_ids, content, deletion → core, settings applet),
 conntest/CBVC, and NASC /ac run in Go with passing end-to-end Wii U + 3DS
 journey suites and a two-binary live smoke. Deferred to M4 with recorded
