@@ -4,7 +4,7 @@ Go rewrite of Pretendo/account's Nintendo surface, rebuilt as a console
 adapter over the OpenPak [account core](../account). Serves NNAS HTTP and the
 Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
 
-**Status: M2 in progress** — PRD and M0 inventory: [PRD.md](PRD.md),
+**Status: M2 and M3 complete, M4 next** — PRD and M0 inventory: [PRD.md](PRD.md),
 [docs/M0-INVENTORY.md](docs/M0-INVENTORY.md).
 
 ## What runs in Go
@@ -18,10 +18,14 @@ Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
   adapter-credential domain; no password material is stored or verified here
 - Durable invalidation events from the core revoke local tokens (bans/unlinks)
 
-## Still TypeScript (until M2 completes)
+## Deferred to M4
 
-NASC `/ac`, devices/miis/support/admin route subset, settings pages, assets,
-conntest/CBVC. The legacy runtime stays until each surface is replaced.
+Console email-confirm trio, `/@me` profile update, and certificate signature crypto with
+operator keys (reasons in `docs/M0-INVENTORY.md`). Everything a pinned Wii U/3DS client needs
+for register, sign-in, NEX token and identity exchange runs in Go. The TypeScript tree under
+`src/` is the upstream reference kept for provenance; the container image builds only
+`cmd/nn-account`. No console or emulator has been run against this yet
+(`docs/client-testing.md`).
 
 ## Run
 
