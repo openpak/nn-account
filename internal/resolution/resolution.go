@@ -7,6 +7,8 @@ package resolution
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgx/v5"
+	accountv1 "openpak/nn-account/internal/accountpb"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
@@ -41,6 +43,16 @@ func (s *Server) ResolvePid(ctx context.Context, req *resolutionv1.ResolvePidReq
 	}
 	if pnid.Deleted {
 		return &resolutionv1.ResolvePidResponse{Found: false}, nil
+	}
+	if pnid.Shadow {
+		// A shadow has no console link by definition; it stands for the core
+		// account as long as that account is not gone.
+		if acct, err := s.core.GetAccount(ctx, pnid.AccountID); err != nil ||
+			acct.GetStatus() == accountv1.AccountStatus_ACCOUNT_STATUS_DELETED ||
+			acct.GetStatus() == accountv1.AccountStatus_ACCOUNT_STATUS_DELETION_PENDING {
+			return &resolutionv1.ResolvePidResponse{Found: false}, nil
+		}
+		return &resolutionv1.ResolvePidResponse{Found: true, AccountId: pnid.AccountID}, nil
 	}
 	// The link must be ACTIVE in the core (fail-closed on core errors).
 	// Subjects are registered as the PID string under the creating
@@ -88,11 +100,84 @@ func (s *Server) ResolveAccount(ctx context.Context, req *resolutionv1.ResolveAc
 		return nil, status.Error(codes.InvalidArgument, "namespace must be wiiu or 3ds")
 	}
 	pnid, err := store.GetPNIDByAccountID(ctx, s.pool, req.GetAccountId())
-	if errors.Is(err, store.ErrNotFound) {
-		return &resolutionv1.ResolveAccountResponse{Found: false}, nil
+	if errors.Is(err, store.ErrNotFound) || errors.Is(err, pgx.ErrNoRows) {
+		// No console of this family: mint the account's shadow PNID so a Wii U or
+		// 3DS friend list can show a Switch or phone user by PID, name and Mii.
+		pnid, err = s.mintShadow(ctx, req.GetAccountId())
+		if errors.Is(err, errNoSuchAccount) {
+			return &resolutionv1.ResolveAccountResponse{Found: false}, nil
+		}
 	}
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}
 	return &resolutionv1.ResolveAccountResponse{Found: true, Pid: uint32(pnid.PID)}, nil
+}
+
+var errNoSuchAccount = errors.New("resolution: no such core account")
+
+// defaultMiiData is upstream's registration default ("Default"), base64 FFLStoreData.
+const defaultMiiData = "AwAAQOlVognnx0GC2/uogAOzuI0n2QAAAEBEAGUAZgBhAHUAbAB0AAAAAAAAAEBAAAAhAQJoRBgmNEYUgRIXaA0AACkAUkhQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGm9"
+
+func (s *Server) mintShadow(ctx context.Context, accountID string) (*store.PNID, error) {
+	acct, err := s.core.GetAccount(ctx, accountID)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errNoSuchAccount
+		}
+		return nil, err
+	}
+	switch acct.GetStatus() {
+	case accountv1.AccountStatus_ACCOUNT_STATUS_DELETED, accountv1.AccountStatus_ACCOUNT_STATUS_DELETION_PENDING:
+		return nil, errNoSuchAccount
+	}
+	pid, err := store.GeneratePID(ctx, s.pool)
+	if err != nil {
+		return nil, err
+	}
+	miiName := acct.GetDisplayName()
+	if r := []rune(miiName); len(r) > 10 {
+		miiName = string(r[:10])
+	}
+	if miiName == "" {
+		miiName = "OpenPak"
+	}
+	p := &store.PNID{PID: pid, AccountID: accountID, ServerAccessLevel: "prod", MiiName: miiName,
+		MiiData: defaultMiiData, Country: "US", Language: "en", Region: 1, TimezoneName: "EST5EDT", Shadow: true}
+	// The NNID shown next to the name: the display name where it fits the NNID
+	// alphabet and is free, otherwise a generated one. Two shadows can race for
+	// the same account; the loser reads the winner's row.
+	for _, username := range []string{nnidFromDisplayName(acct.GetDisplayName()), "op" + itoa(pid)} {
+		if username == "" {
+			continue
+		}
+		p.Username = username
+		err = store.InsertPNID(ctx, s.pool, p)
+		if err == nil {
+			return p, nil
+		}
+		if !store.IsUniqueViolation(err) {
+			return nil, err
+		}
+	}
+	if existing, e := store.GetPNIDByAccountID(ctx, s.pool, accountID); e == nil {
+		return existing, nil
+	}
+	return nil, err
+}
+
+// nnidFromDisplayName keeps only the NNID alphabet (letters, digits, - _ .) and
+// requires the 6..16 length NNAS enforces; "" when the name does not qualify.
+func nnidFromDisplayName(name string) string {
+	var b []byte
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_', r == '.':
+			b = append(b, byte(r))
+		}
+	}
+	if len(b) < 6 || len(b) > 16 {
+		return ""
+	}
+	return string(b)
 }

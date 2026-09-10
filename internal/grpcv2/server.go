@@ -87,7 +87,7 @@ func (s *Server) GetUserData(ctx context.Context, req *pb.GetUserDataRequest) (*
 	if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
 		return nil, err
 	}
-	if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {
+	if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil && !pnid.Shadow {
 		return nil, err
 	}
 	return &pb.GetUserDataResponse{
