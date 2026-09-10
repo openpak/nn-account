@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	accountv1 "openpak/account/proto/openpak/account/v1"
+	accountv1 "openpak/nn-account/internal/accountpb"
 )
 
 type Client struct {

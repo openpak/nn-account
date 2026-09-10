@@ -27,7 +27,7 @@ import (
 
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
 
-	accountv1 "openpak/account/proto/openpak/account/v1"
+	accountv1 "openpak/nn-account/internal/accountpb"
 
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/coreclient"
