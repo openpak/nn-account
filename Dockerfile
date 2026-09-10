@@ -1,48 +1,19 @@
 # syntax=docker/dockerfile:1
+# The Go adapter (cmd/nn-account). The legacy TypeScript runtime under src/ is not built here.
 
-ARG app_dir="/home/node/app"
-
-
-# * Base Node.js image
-FROM node:20-alpine AS base
-ARG app_dir
-WORKDIR ${app_dir}
-
-
-# * Installing production dependencies
-FROM base AS dependencies
-
-RUN --mount=type=bind,source=package.json,target=package.json \
-	--mount=type=bind,source=package-lock.json,target=package-lock.json \
-	--mount=type=cache,target=/root/.npm \
-	npm ci --omit=dev
-
-
-# * Installing development dependencies and building the application
-FROM base AS build
-
-RUN --mount=type=bind,source=package.json,target=package.json \
-	--mount=type=bind,source=package-lock.json,target=package-lock.json \
-	--mount=type=cache,target=/root/.npm \
-	npm ci
-
+FROM golang:1.25-alpine AS build
+WORKDIR /src
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+	--mount=type=bind,source=go.sum,target=go.sum \
+	--mount=type=bind,source=go.mod,target=go.mod \
+	go mod download -x
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+	CGO_ENABLED=0 go build -trimpath -o /out/nn-account ./cmd/nn-account
 
-RUN --mount=type=secret,id=ip2location-token,env=PN_ACT_CONFIG_IP2LOCATION_TOKEN \
-	npm run build
-
-# * Running the final application
-FROM base AS final
-ARG app_dir
-
-RUN mkdir -p ${app_dir}/logs && chown node:node ${app_dir}/logs
-
-ENV NODE_ENV=production
-USER node
-
-COPY package.json .
-
-COPY --from=dependencies ${app_dir}/node_modules ${app_dir}/node_modules
-COPY --from=build ${app_dir}/dist ${app_dir}/dist
-
-CMD ["node", "."]
+FROM alpine:3.22
+RUN addgroup -S app && adduser -S -G app app && apk add --no-cache ca-certificates
+USER app
+COPY --from=build /out/nn-account /usr/local/bin/nn-account
+EXPOSE 7001 8001
+ENTRYPOINT ["/usr/local/bin/nn-account"]

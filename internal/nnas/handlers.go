@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	accountv1 "openpak/account/proto/openpak/account/v1"
+	accountv1 "openpak/nn-account/internal/accountpb"
 	"openpak/nn-account/internal/store"
 )
 
