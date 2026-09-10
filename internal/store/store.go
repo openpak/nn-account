@@ -92,17 +92,18 @@ type PNID struct {
 	TimezoneName      string
 	Deleted           bool
 	CreationDate      time.Time
+	Shadow            bool // no console of this family; minted so other surfaces' users can be listed
 }
 
 const pnidCols = `pnids.pid, pnids.username, pnids.account_id, pnids.access_level, pnids.server_access_level,
 	pnids.mii_name, pnids.mii_data, pnids.mii_hash, pnids.country, pnids.language, pnids.region,
-	pnids.timezone_name, pnids.deleted, pnids.creation_date`
+	pnids.timezone_name, pnids.deleted, pnids.creation_date, pnids.shadow`
 
 func scanPNID(row pgx.Row) (*PNID, error) {
 	var p PNID
 	err := row.Scan(&p.PID, &p.Username, &p.AccountID, &p.AccessLevel, &p.ServerAccessLevel,
 		&p.MiiName, &p.MiiData, &p.MiiHash, &p.Country, &p.Language, &p.Region, &p.TimezoneName,
-		&p.Deleted, &p.CreationDate)
+		&p.Deleted, &p.CreationDate, &p.Shadow)
 	if err != nil {
 		return nil, err
 	}
@@ -132,10 +133,10 @@ func GetPNIDByBasicAuth(ctx context.Context, q Querier, base64Token string) (*PN
 // InsertPNID creates a PNID; PID uniqueness is retried by callers.
 func InsertPNID(ctx context.Context, q Querier, p *PNID) error {
 	_, err := q.Exec(ctx, `INSERT INTO pnids (pid, username, account_id, access_level, server_access_level,
-		mii_name, mii_data, mii_hash, country, language, region, timezone_name)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		mii_name, mii_data, mii_hash, country, language, region, timezone_name, shadow)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 		p.PID, p.Username, p.AccountID, p.AccessLevel, p.ServerAccessLevel,
-		p.MiiName, p.MiiData, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName)
+		p.MiiName, p.MiiData, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName, p.Shadow)
 	return err
 }
 
@@ -493,7 +494,7 @@ func strconv_itoa(n int) string {
 }
 
 func GetPNIDByAccountID(ctx context.Context, q Querier, accountID string) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 ORDER BY pnids.pid LIMIT 1`, accountID))
+	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 AND NOT pnids.deleted ORDER BY pnids.shadow, pnids.pid LIMIT 1`, accountID))
 }
 
 // GetServerByGameServerIDAnyMode resolves a server regardless of access mode
