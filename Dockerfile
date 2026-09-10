@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # The Go adapter (cmd/nn-account). The legacy TypeScript runtime under src/ is not built here.
 
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 RUN --mount=type=cache,target=/go/pkg/mod/ \
 	--mount=type=bind,source=go.sum,target=go.sum \
