@@ -180,7 +180,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, "151")
 			return
 		}
-		friendCode := friendCodeForPID(newPID)
+		friendCode := FriendCodeForPID(newPID)
 		if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 			if err := store.InsertProvisionalNEXAccount(ctx, tx, newPID, password, "3ds", friendCode); err != nil {
 				return err
@@ -376,8 +376,8 @@ func modelForSerial(serial string) string {
 	}
 }
 
-// friendCodeForPID ports the upstream friend-code derivation.
-func friendCodeForPID(pid int64) string {
+// FriendCodeForPID ports the upstream friend-code derivation.
+func FriendCodeForPID(pid int64) string {
 	buf := make([]byte, 4)
 	buf[0] = byte(pid)
 	buf[1] = byte(pid >> 8)

@@ -24,6 +24,7 @@ import (
 	resolutionv1 "openpak/nn-account/proto/resolution/v1"
 
 	"openpak/nn-account/internal/config"
+	"openpak/nn-account/internal/emulator"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/grpcv2"
 	"openpak/nn-account/internal/nasc"
@@ -82,6 +83,9 @@ func run() error {
 	mux.Handle("/", nas)
 	mux.Handle("/ac", nascSrv)
 	mux.Handle("/ac/", nascSrv)
+	if cfg.InternalKey != "" {
+		mux.Handle("/internal/", emulator.New(pool, core, cfg.InternalKey))
+	}
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPListenAddr,

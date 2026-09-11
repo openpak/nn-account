@@ -21,6 +21,7 @@ type Config struct {
 	CDNBaseURL       string // Mii asset base URL
 	Environment      string
 	AllowedHostnames []string // empty = allow all (development)
+	InternalKey      string   // /internal/* HTTP surface (the website); empty disables it
 }
 
 func Load() (*Config, error) {
@@ -35,6 +36,7 @@ func Load() (*Config, error) {
 		NASCDomain:       os.Getenv("NN_ACCOUNT_NASC_DOMAIN"),
 		CDNBaseURL:       envOr("NN_ACCOUNT_CDN_BASE_URL", "https://cdn.openpak.example"),
 		Environment:      envOr("NN_ACCOUNT_ENVIRONMENT", "production"),
+		InternalKey:      os.Getenv("NN_ACCOUNT_INTERNAL_KEY"),
 		AllowedHostnames: nil,
 	}
 	if h := os.Getenv("NN_ACCOUNT_ALLOWED_HOSTNAMES"); h != "" {
