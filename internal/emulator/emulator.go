@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -52,14 +53,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Identity is what the emulator writes into its emulated console.
 type Identity struct {
-	AccountID   string `json:"account_id"`
-	PID         int64  `json:"pid"`
-	Username    string `json:"username"`
-	FriendCode  string `json:"friend_code,omitempty"` // 3DS only
-	NEXPassword string `json:"nex_password"`
-	MiiName     string `json:"mii_name"`
-	MiiData     string `json:"mii_data"` // base64 FFLStoreData
-	DeviceType  string `json:"device_type"`
+	AccountID     string `json:"account_id"`
+	PID           int64  `json:"pid"`
+	Username      string `json:"username"`
+	FriendCode    string `json:"friend_code,omitempty"` // 3DS only
+	NEXPassword   string `json:"nex_password"`
+	MiiName       string `json:"mii_name"`
+	MiiData       string `json:"mii_data"` // base64 FFLStoreData
+	DeviceType    string `json:"device_type"`
+	PasswordCache string `json:"password_cache,omitempty"` // base64 of the 32 account.dat cache bytes (NA-1a)
 }
 
 func (s *Server) identity(ns string) http.HandlerFunc {
@@ -120,12 +122,50 @@ func (s *Server) Ensure(ctx context.Context, ns, accountID string) (*Identity, e
 	if err != nil {
 		return nil, err
 	}
+	cache, err := s.ensurePasswordCache(ctx, ns, pnid)
+	if err != nil {
+		return nil, err
+	}
 	id := &Identity{AccountID: accountID, PID: pnid.PID, Username: pnid.Username, NEXPassword: nex.Password,
-		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType}
+		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache}
 	if ns == "3ds" {
 		id.FriendCode = nasc.FriendCodeForPID(pnid.PID)
 	}
 	return id, nil
+}
+
+// ensurePasswordCache returns the account's console credential bytes (base64,
+// 32 raw bytes), minting them once when this adapter owns the identity: the
+// transformed secret is stored in the core's adapter credential domain, and
+// its raw form here, so the NNAS oauth20 grant verifies. A cache minted at
+// console registration is already on the row and is returned as-is — an
+// emulator and a console are one person on the network, with one credential.
+func (s *Server) ensurePasswordCache(ctx context.Context, ns string, pnid *store.PNID) (string, error) {
+	if pnid.PasswordCache != "" {
+		return base64.StdEncoding.EncodeToString(mustHex(pnid.PasswordCache)), nil
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	hexCache := hex.EncodeToString(raw)
+	if err := s.core.SetAdapterCredential(ctx, ns, pnid.AccountID, hexCache); err != nil {
+		return "", err
+	}
+	if err := store.SetPNIDPasswordCache(ctx, s.pool, pnid.PID, hexCache); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(raw), nil
+}
+
+// mustHex decodes a stored cache; rows are only ever written by this package
+// from hex.EncodeToString or NintendoPasswordHash, both lowercase hex.
+func mustHex(s string) []byte {
+	out, err := hex.DecodeString(s)
+	if err != nil {
+		panic("emulator: stored password cache is not hex: " + err.Error())
+	}
+	return out
 }
 
 func (s *Server) mint(ctx context.Context, ns string, acct *accountv1.GetAccountResponse) (*store.PNID, error) {
