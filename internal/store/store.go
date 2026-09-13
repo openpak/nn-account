@@ -92,18 +92,19 @@ type PNID struct {
 	TimezoneName      string
 	Deleted           bool
 	CreationDate      time.Time
-	Shadow            bool // no console of this family; minted so other surfaces' users can be listed
+	Shadow            bool   // no console of this family; minted so other surfaces' users can be listed
+	PasswordCache     string // hex of the 32 account.dat cache bytes; the NNAS login secret as consoles send it
 }
 
 const pnidCols = `pnids.pid, pnids.username, pnids.account_id, pnids.access_level, pnids.server_access_level,
 	pnids.mii_name, pnids.mii_data, pnids.mii_hash, pnids.country, pnids.language, pnids.region,
-	pnids.timezone_name, pnids.deleted, pnids.creation_date, pnids.shadow`
+	pnids.timezone_name, pnids.deleted, pnids.creation_date, pnids.shadow, pnids.password_cache`
 
 func scanPNID(row pgx.Row) (*PNID, error) {
 	var p PNID
 	err := row.Scan(&p.PID, &p.Username, &p.AccountID, &p.AccessLevel, &p.ServerAccessLevel,
 		&p.MiiName, &p.MiiData, &p.MiiHash, &p.Country, &p.Language, &p.Region, &p.TimezoneName,
-		&p.Deleted, &p.CreationDate, &p.Shadow)
+		&p.Deleted, &p.CreationDate, &p.Shadow, &p.PasswordCache)
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +134,18 @@ func GetPNIDByBasicAuth(ctx context.Context, q Querier, base64Token string) (*PN
 // InsertPNID creates a PNID; PID uniqueness is retried by callers.
 func InsertPNID(ctx context.Context, q Querier, p *PNID) error {
 	_, err := q.Exec(ctx, `INSERT INTO pnids (pid, username, account_id, access_level, server_access_level,
-		mii_name, mii_data, mii_hash, country, language, region, timezone_name, shadow)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		mii_name, mii_data, mii_hash, country, language, region, timezone_name, shadow, password_cache)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		p.PID, p.Username, p.AccountID, p.AccessLevel, p.ServerAccessLevel,
-		p.MiiName, p.MiiData, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName, p.Shadow)
+		p.MiiName, p.MiiData, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName, p.Shadow, p.PasswordCache)
+	return err
+}
+
+// SetPNIDPasswordCache records the console credential bytes (hex) once. The
+// first write wins: the cache is minted with the identity, exactly as a
+// console writes account.dat at registration, and is never rotated here.
+func SetPNIDPasswordCache(ctx context.Context, q Querier, pid int64, hexCache string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET password_cache=$2 WHERE pid=$1 AND password_cache=''`, pid, hexCache)
 	return err
 }
 

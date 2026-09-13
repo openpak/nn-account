@@ -86,6 +86,11 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		writeXMLErr(w, http.StatusInternalServerError, "", "1600", "Unable to process request")
 		return
 	}
+	// The transformed secret IS the account.dat password cache (the console
+	// derived it from the plaintext with the same transformation); keeping it
+	// here means the emulator surface returns the same identity the console
+	// holds instead of minting a second credential over this one.
+	cacheHex := transformed
 
 	// Register the link as pending, then activate (core is authoritative).
 	if err := s.core.ReserveAndActivateLink(r.Context(), "wiiu", strconv.FormatInt(pid, 10), accountID); err != nil {
@@ -107,6 +112,7 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		MiiName: miiName, MiiData: miiData, MiiHash: randomHex(7),
 		Country: defaultStr(country, "US"), Language: defaultStr(language, "en"),
 		Region: defaultInt(region, 1), TimezoneName: defaultStr(timezoneName, "EST5EDT"),
+		PasswordCache: cacheHex,
 	}
 	ctx := r.Context()
 	if err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
