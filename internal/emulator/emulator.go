@@ -62,6 +62,8 @@ type Identity struct {
 	MiiData       string `json:"mii_data"` // base64 FFLStoreData
 	DeviceType    string `json:"device_type"`
 	PasswordCache string `json:"password_cache,omitempty"` // base64 of the 32 account.dat cache bytes (NA-1a)
+	Country       string `json:"country,omitempty"`       // NNAS country name, e.g. "US"
+	Language      string `json:"language,omitempty"`       // e.g. "en"
 }
 
 func (s *Server) identity(ns string) http.HandlerFunc {
@@ -127,7 +129,8 @@ func (s *Server) Ensure(ctx context.Context, ns, accountID string) (*Identity, e
 		return nil, err
 	}
 	id := &Identity{AccountID: accountID, PID: pnid.PID, Username: pnid.Username, NEXPassword: nex.Password,
-		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache}
+		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache,
+		Country: pnid.Country, Language: pnid.Language}
 	if ns == "3ds" {
 		id.FriendCode = nasc.FriendCodeForPID(pnid.PID)
 	}
