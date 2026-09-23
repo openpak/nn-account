@@ -11,6 +11,10 @@ service Resolution {
   rpc ResolvePid(ResolvePidRequest) returns (ResolvePidResponse);
   // Reverse mapping for rendering friend lists (account -> PID).
   rpc ResolveAccount(ResolveAccountRequest) returns (ResolveAccountResponse);
+  // What a NEX token was issued to: "wiiu"/"3ds" for a console, or the
+  // emulator that asked for it ("cemu", "azahar"), so nn-friends can publish
+  // presence as "on Cemu" for the same PNID a console also uses.
+  rpc ResolveNexTokenClient(ResolveNexTokenClientRequest) returns (ResolveNexTokenClientResponse);
 }
 
 message ResolvePidRequest {
@@ -32,4 +36,17 @@ message ResolveAccountRequest {
 message ResolveAccountResponse {
   bool found = 1;
   uint32 pid = 2;
+}
+
+message ResolveNexTokenClientRequest {
+  // The NEX token as the console presented it at login (base64).
+  string token = 1;
+}
+
+message ResolveNexTokenClientResponse {
+  // false: no live token by that value.
+  bool found = 1;
+  // "" for tokens issued before clients were recorded.
+  string client = 2;
+  uint32 pid = 3;
 }
