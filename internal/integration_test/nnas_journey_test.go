@@ -21,8 +21,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
@@ -355,6 +357,25 @@ func TestAdapterConsoleJourney(t *testing.T) {
 	})
 	if !strings.Contains(banned, "0108") {
 		t.Fatalf("expected 0108 banned: %s", banned)
+	}
+
+	// The game servers learn the ban from the NEX credential lookups; the NEX
+	// titles map this exact refusal (InvalidArgument, "banned" in the message)
+	// to RendezVous::AccountDisabled, so pin it here.
+	for name, call := range map[string]func() error{
+		"GetNEXPassword": func() error {
+			_, err := v2.GetNEXPassword(gctx, &pb.GetNEXPasswordRequest{Pid: uint32(pnid.PID)})
+			return err
+		},
+		"GetNEXData": func() error {
+			_, err := v2.GetNEXData(gctx, &pb.GetNEXDataRequest{Pid: uint32(pnid.PID)})
+			return err
+		},
+	} {
+		err := call()
+		if st := status.Convert(err); st.Code() != codes.InvalidArgument || !strings.Contains(st.Message(), "banned") {
+			t.Fatalf("%s for a banned owner: want InvalidArgument \"...banned...\", got %v", name, err)
+		}
 	}
 
 	// Existing token also fails after ban+deletion: local tokens were

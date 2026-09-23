@@ -18,6 +18,16 @@ Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
   adapter-credential domain; no password material is stored or verified here
 - Durable invalidation events from the core revoke local tokens (bans/unlinks)
 
+## Bans
+
+An account banned in the OpenPak admin is refused everywhere this adapter vouches for it
+([`website/docs/ban-lookup.md`](../website/docs/ban-lookup.md)): NNAS sign-in, token refresh and
+every bearer call answer NNID error 0108 "Account has been banned"; NASC answers 102; the v2
+gRPC (`GetNEXPassword`, `GetNEXData`, token exchanges, `GetUserData`) refuses with
+InvalidArgument "Account is banned or deleted", which the NEX game servers turn into
+`RendezVous::AccountDisabled`; `ValidateIndependentServiceToken` answers invalid. The core is
+asked on every call (no cache), and `account_banned` revokes local tokens.
+
 ## Deferred to M4
 
 Console email-confirm trio, `/@me` profile update, and certificate signature crypto with
