@@ -31,6 +31,18 @@ func (s *Server) GetNEXData(ctx context.Context, req *pb.GetNEXDataRequest) (*pb
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}
+	// Same gate as GetNEXPassword: a banned or deleting owner gets no NEX
+	// credentials (website/docs/ban-lookup.md). Device-only identities have
+	// no owner to check.
+	if nexAccount.OwningPID != nil {
+		pnid, err := store.GetPNIDByPID(ctx, s.pool, *nexAccount.OwningPID)
+		if err != nil || pnid.Deleted {
+			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+		}
+		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+			return nil, err
+		}
+	}
 	return &pb.GetNEXDataResponse{
 		Pid:               uint32(nexAccount.PID),
 		Password:          nexAccount.Password,
@@ -98,7 +110,11 @@ func (s *Server) ValidateIndependentServiceToken(ctx context.Context, req *pb.Va
 		return invalid, nil
 	}
 	level := nexAccount.AccessLevel
-	if pnid, err := store.GetPNIDByPID(ctx, s.pool, pid); err == nil {
+	if pnid, err := store.GetPNIDByPID(ctx, s.pool, nexAccount.OwningPIDOrSelf()); err == nil {
+		// A banned or deleting owner's token is no longer valid.
+		if pnid.Deleted || s.checkCoreStatus(ctx, pnid.AccountID) != nil {
+			return invalid, nil
+		}
 		level = pnid.AccessLevel
 	}
 	return &pb.ValidateIndependentServiceTokenResponse{IsValid: true, BasicUserInfo: basicUserInfo(level)}, nil

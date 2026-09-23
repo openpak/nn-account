@@ -6,6 +6,17 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## Unreleased
+
+- Bans (website/docs/ban-lookup.md): the two v2 RPCs that still handed out credentials for a
+  banned owner now refuse it. `GetNEXData` checks the owning account's core status like
+  `GetNEXPassword` (InvalidArgument "Account is banned or deleted"), and
+  `ValidateIndependentServiceToken` answers `is_valid: false` for a banned or deleting owner.
+  The NEX titles map the InvalidArgument "banned" refusal to `RendezVous::AccountDisabled`;
+  the integration journey now pins it for both RPCs. Everything else already enforced the
+  ban: NNAS sign-in, refresh and every bearer call answer 0108 "Account has been banned",
+  NASC answers 102, and `account_banned` revokes local tokens. No new environment variables.
+
 ## v0.4.0 — 2026-09-11
 
 
