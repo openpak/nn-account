@@ -12,19 +12,20 @@ has signed in yet.
 
 - M0–M3 complete (PRD.md): shadow PNIDs, NNAS+NASC surfaces, conntest/CBVC,
   gRPC v2 with audience/type checks, Resolution service (PID <-> core account).
-- v0.5.0 = HEAD = e334770 (2026-09-13): the internal emulator surface carries
+- v0.5.0 = e334770 (2026-09-13): the internal emulator surface carries
   the Wii U/3DS identity, the console password cache (NA-1a), and the PNID's
   country and language.
+- v0.6.0 (2026-09-23, deployed): NEX tokens record the client they were
+  issued to (`X-OpenPak-Client` from Cemu/Azahar, else `wiiu`/`3ds`;
+  `nex_tokens.client`, migration 0005); `Resolution.ResolveNexTokenClient`
+  lets nn-friends publish "on Cemu"/"on Azahar". Also `/internal/resolve/{pid,account}`
+  (resolvehttp, the plain-HTTP Resolution face for the Miiverse bridge; no
+  tests of its own yet).
 - M4 deferred with recorded reasons (docs/M0-INVENTORY.md): console
   email-confirm trio, `/@me` profile update, cert signature crypto with
   operator keys.
 - `src/` is the upstream TypeScript tree (Pretendo account/Juxt) kept for
   provenance; the container image builds only `cmd/nn-account`.
-- Uncommitted work past v0.5.0: `internal/resolvehttp/` plus a `main.go` hunk
-  mounting it at `/internal/resolve/{pid,account}` beside the emulator surface,
-  same `X-Internal-Key` — a plain-HTTP face of the Resolution service for the
-  TypeScript Miiverse bridge, whose toolchain has no gRPC codegen for our
-  protos. No tests written for it yet.
 - Also untracked: `CHANGELOG.md`, `prds/` (workspace-wide docs effort).
 - Integration suite runs the real core + Postgres through the full console
   journey plus ban/audience negatives: `go test -tags integration -race ./...`.
@@ -39,8 +40,7 @@ has signed in yet.
 
 ## Next steps
 
-1. Finish, test and commit `internal/resolvehttp` once the Miiverse bridge's
-   needs settle; it is the only code past v0.5.0.
+1. Tests for `internal/resolvehttp` once the Miiverse bridge's needs settle.
 2. M4 in PRD order: email-confirm trio, `/@me` profile update, cert crypto.
 3. Console verification: first sign-in via nn-inkay or nn-nimbus against prod;
    record the client matrix at acceptance (docs/client-testing.md).
