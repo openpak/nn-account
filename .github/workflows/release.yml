@@ -5,7 +5,7 @@ name: release
 # is the deploy. This Dockerfile compiles natively per platform, so arm64 goes through QEMU.
 on:
   push:
-    tags: ['v*']
+    tags: ['v*.*.*']
   workflow_dispatch:
 
 permissions:
