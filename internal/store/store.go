@@ -311,10 +311,20 @@ func InsertOAuthToken(ctx context.Context, q Querier, rawToken, clientID string,
 	return err
 }
 
-func InsertNEXToken(ctx context.Context, q Querier, rawToken, gameServerID string, pid, titleID int64, issued, expires time.Time) error {
-	_, err := q.Exec(ctx, `INSERT INTO nex_tokens (token_hash, game_server_id, pid, title_id, issued_at, expires_at)
-		VALUES ($1,$2,$3,$4,$5,$6)`, HashToken(rawToken), gameServerID, pid, titleID, issued, expires)
+// InsertNEXToken stores a NEX token with the client it was issued to
+// (package clientid).
+func InsertNEXToken(ctx context.Context, q Querier, rawToken, gameServerID string, pid, titleID int64, issued, expires time.Time, client string) error {
+	_, err := q.Exec(ctx, `INSERT INTO nex_tokens (token_hash, game_server_id, pid, title_id, issued_at, expires_at, client)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)`, HashToken(rawToken), gameServerID, pid, titleID, issued, expires, client)
 	return err
+}
+
+// GetNEXTokenClient is the client a live NEX token was issued to, and the PID
+// it belongs to.
+func GetNEXTokenClient(ctx context.Context, q Querier, rawToken string) (client string, pid int64, err error) {
+	err = q.QueryRow(ctx, `SELECT client, pid FROM nex_tokens WHERE token_hash=$1 AND expires_at > now()`,
+		HashToken(rawToken)).Scan(&client, &pid)
+	return
 }
 
 func GetNEXToken(ctx context.Context, q Querier, rawToken string) (gameServerID string, pid, titleID int64, issued, expires time.Time, err error) {

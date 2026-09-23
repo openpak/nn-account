@@ -7,6 +7,7 @@ import (
 	"time"
 
 	accountv1 "openpak/nn-account/internal/accountpb"
+	"openpak/nn-account/internal/clientid"
 	"openpak/nn-account/internal/store"
 )
 
@@ -172,7 +173,7 @@ func (s *Server) handleNEXToken(w http.ResponseWriter, r *http.Request, pnid *st
 	token := nintendoRandomToken(36) // base64 of 36 random bytes (upstream shape)
 	now := time.Now()
 	if err := store.InsertNEXToken(r.Context(), s.pool, token, gameServerID, pnid.PID,
-		int64(parseTitleID(titleID)), now, now.Add(time.Hour)); err != nil {
+		int64(parseTitleID(titleID)), now, now.Add(time.Hour), clientid.Of(r, "wiiu")); err != nil {
 		writeXMLErr(w, http.StatusInternalServerError, "", "1600", "Unable to process request")
 		return
 	}

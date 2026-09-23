@@ -18,7 +18,9 @@ import (
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
+	"openpak/nn-account/internal/resolution"
 	"openpak/nn-account/internal/store"
+	resolutionv1 "openpak/nn-account/proto/resolution/v1"
 )
 
 var base64Std = base64.StdEncoding
@@ -34,12 +36,32 @@ func nencBytes(b []byte) string { return nenc(string(b)) }
 
 func postNASC(t *testing.T, srv http.Handler, fields map[string]string) (int, string) {
 	t.Helper()
+	return postNASCAs(t, srv, fields, "")
+}
+
+// nascParam reads one field of a NASC response. The fields come in map order,
+// so any of them can be the last one.
+func nascParam(body, key string) string {
+	for _, kv := range strings.Split(body, "&") {
+		if k, v, ok := strings.Cut(kv, "="); ok && k == key {
+			return v
+		}
+	}
+	return ""
+}
+
+// postNASCAs is postNASC from an emulator that names itself in X-OpenPak-Client.
+func postNASCAs(t *testing.T, srv http.Handler, fields map[string]string, client string) (int, string) {
+	t.Helper()
 	parts := make([]string, 0, len(fields))
 	for k, v := range fields {
 		parts = append(parts, k+"="+v)
 	}
 	req := httptest.NewRequest("POST", "/ac", strings.NewReader(strings.Join(parts, "&")))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if client != "" {
+		req.Header.Set("X-OpenPak-Client", client)
+	}
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	return rec.Code, rec.Body.String()
@@ -105,11 +127,11 @@ func TestNASC3DSJourney(t *testing.T) {
 	if code != 200 || !strings.Contains(body, "returncd="+nenc("001")) {
 		t.Fatalf("LOGIN failed: %d %s", code, body)
 	}
-	locator := between(body, "locator="+nenc(""), "&")
+	locator := nascParam(body, "locator")
 	if locator == "" {
 		t.Fatalf("missing locator: %s", body)
 	}
-	token := between(body, "token="+nenc(""), "&")
+	token := nascParam(body, "token")
 	if token == "" {
 		t.Fatalf("missing token: %s", body)
 	}
@@ -134,6 +156,37 @@ func TestNASC3DSJourney(t *testing.T) {
 		Token: token, GameServerIds: []string{"0000ffff"},
 	}); err == nil {
 		t.Fatal("expected audience rejection for NASC token")
+	}
+
+	// --- 3b. The token remembers its client: the console, then Azahar ---
+	res := resolution.New(pool, core)
+	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: token}); err != nil ||
+		!c.GetFound() || c.GetClient() != "3ds" || c.GetPid() != uint32(nexPID) {
+		t.Fatalf("console token client: %+v %v", c, err)
+	}
+	loginFields := map[string]string{
+		"action":     nenc("LOGIN"),
+		"fcdcert":    nencBytes(fcdcert),
+		"csnum":      nenc(csnum),
+		"macadr":     nenc(macadr),
+		"titleid":    nenc("0005000010143500"),
+		"servertype": nenc("prod"),
+		"gameid":     nenc("00003200"),
+		"userid":     nenc(itoa(int(nexPID))),
+		"passwd":     nenc("3dsNEXsecret42"),
+		"uidhmac":    nenc("hmac-value"),
+	}
+	code, body = postNASCAs(t, nascSrv, loginFields, "azahar/2125.0")
+	azaharToken := nascParam(body, "token")
+	if code != 200 || azaharToken == "" {
+		t.Fatalf("azahar LOGIN failed: %d %s", code, body)
+	}
+	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: azaharToken}); err != nil ||
+		!c.GetFound() || c.GetClient() != "azahar" {
+		t.Fatalf("azahar token client: %+v %v", c, err)
+	}
+	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: "no-such-token"}); err != nil || c.GetFound() {
+		t.Fatalf("unknown token: %+v %v", c, err)
 	}
 
 	// --- 4. SVCLOC issues a service token ---

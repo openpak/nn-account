@@ -21,6 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"openpak/nn-account/internal/cert"
+	"openpak/nn-account/internal/clientid"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/store"
@@ -233,17 +234,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "LOGIN":
-		s.respondLogin(ctx, w, server, nexAccount, titleID, ip, port)
+		s.respondLogin(ctx, w, server, nexAccount, titleID, ip, port, clientid.Of(r, "3ds"))
 	case "SVCLOC":
 		s.respondServiceToken(ctx, w, server, nexAccount, titleID, p.Get("keyhash"))
 	}
 }
 
-func (s *Server) respondLogin(ctx context.Context, w http.ResponseWriter, server *store.Server, nexAccount *store.NEXAccount, titleID, ip string, port int32) {
+func (s *Server) respondLogin(ctx context.Context, w http.ResponseWriter, server *store.Server, nexAccount *store.NEXAccount, titleID, ip string, port int32, client string) {
 	token := nintendoEncodeBytes(nintendoRandomBytes(112))
 	now := time.Now()
 	if err := store.InsertNEXToken(ctx, s.pool, token, server.GameServerID, nexAccount.PID,
-		int64(parseHexUint64(titleID)), now, now.Add(time.Hour)); err != nil {
+		int64(parseHexUint64(titleID)), now, now.Add(time.Hour), client); err != nil {
 		s.writeError(w, "110")
 		return
 	}
