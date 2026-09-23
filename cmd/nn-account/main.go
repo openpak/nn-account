@@ -30,6 +30,7 @@ import (
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/resolution"
+	"openpak/nn-account/internal/resolvehttp"
 	"openpak/nn-account/internal/store"
 )
 
@@ -84,6 +85,9 @@ func run() error {
 	mux.Handle("/ac", nascSrv)
 	mux.Handle("/ac/", nascSrv)
 	if cfg.InternalKey != "" {
+		// Longest pattern wins: the resolve facade sits beside the emulator
+		// surface under the one internal key.
+		mux.Handle("/internal/resolve/", resolvehttp.New(pool, core, cfg.InternalKey))
 		mux.Handle("/internal/", emulator.New(pool, core, cfg.InternalKey))
 	}
 
