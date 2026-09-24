@@ -133,6 +133,26 @@ func (c *Client) ReserveAndActivateLink(ctx context.Context, namespace, subjectI
 	return err
 }
 
+// EnsureLink makes sure the subject has an active link in exactly this
+// namespace, creating one for the account if not. GetActiveLink falls back to
+// the other family, so it cannot answer this: an account whose NNID was made on
+// a Wii U has a "wiiu" link, and signing that identity into Azahar must add the
+// "3ds" one too, or the website and the app never see its 3DS friend code.
+func (c *Client) EnsureLink(ctx context.Context, namespace, subjectID, accountID string) error {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	link, err := c.links.GetLinkBySubject(rctx, &accountv1.GetLinkBySubjectRequest{
+		Namespace: namespace, SubjectId: subjectID,
+	})
+	if err == nil && link.State == accountv1.LinkState_LINK_STATE_ACTIVE {
+		return nil
+	}
+	if err != nil && status.Code(err) != codes.NotFound {
+		return err
+	}
+	return c.ReserveAndActivateLink(ctx, namespace, subjectID, accountID)
+}
+
 // PublishNNID puts the account's Nintendo Network ID on its Wii U link as the
 // link's public code (account docs/public-codes.md), so the website and the
 // app can show it and people can add each other by it. A link that already

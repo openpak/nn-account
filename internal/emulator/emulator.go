@@ -128,6 +128,18 @@ func (s *Server) Ensure(ctx context.Context, ns, accountID string) (*Identity, e
 	if err != nil {
 		return nil, err
 	}
+	// One identity serves both families, so an account first seen on one has
+	// no link for the other yet. Best effort: the emulator signs in either way,
+	// and the next sign-in retries.
+	subject := strconv.FormatInt(pnid.PID, 10)
+	if err := s.core.EnsureLink(ctx, ns, subject, pnid.AccountID); err != nil {
+		log.Printf("emulator %s: link pid %d: %v", ns, pnid.PID, err)
+	}
+	if ns == "wiiu" {
+		if err := s.core.PublishNNID(ctx, pnid.PID, pnid.Username); err != nil {
+			log.Printf("emulator wiiu: publish NNID for pid %d: %v", pnid.PID, err)
+		}
+	}
 	id := &Identity{AccountID: accountID, PID: pnid.PID, Username: pnid.Username, NEXPassword: nex.Password,
 		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache,
 		Country: pnid.Country, Language: pnid.Language}
