@@ -111,6 +111,22 @@ func scanPNID(row pgx.Row) (*PNID, error) {
 	return &p, nil
 }
 
+// PNIDName is a PNID's id and its Nintendo Network ID, for publishing the
+// name onto the account's Wii U link.
+type PNIDName struct {
+	PID      int64
+	Username string
+}
+
+// ListPNIDNames is every live PNID's id and name.
+func ListPNIDNames(ctx context.Context, pool *pgxpool.Pool) ([]PNIDName, error) {
+	rows, err := pool.Query(ctx, `SELECT pid, username FROM pnids WHERE NOT deleted ORDER BY pid`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[PNIDName])
+}
+
 func GetPNIDByPID(ctx context.Context, q Querier, pid int64) (*PNID, error) {
 	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.pid=$1`, pid))
 }
