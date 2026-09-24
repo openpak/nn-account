@@ -107,6 +107,9 @@ func run() error {
 	// Durable invalidation event consumer: core bans/unlinks/deletions revoke
 	// local tokens (PRD §7 consistency rules).
 	go eventLoop(ctx, pool, core)
+	// Accounts made before NNIDs were published on their links, and any
+	// registration whose publish failed, get theirs now. Idempotent.
+	go publishNNIDs(ctx, pool, core)
 
 	log.Printf("nn-account adapter listening: grpc=%s http=%s", cfg.GRPCListenAddr, cfg.HTTPListenAddr)
 
@@ -223,4 +226,21 @@ func hostRestrict(cfg *config.Config, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// publishNNIDs puts every PNID's name on its Wii U link, once at startup.
+func publishNNIDs(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client) {
+	names, err := store.ListPNIDNames(ctx, pool)
+	if err != nil {
+		log.Printf("publish NNIDs: list: %v", err)
+		return
+	}
+	failed := 0
+	for _, n := range names {
+		if err := core.PublishNNID(ctx, n.PID, n.Username); err != nil {
+			failed++
+			log.Printf("publish NNIDs: pid %d: %v", n.PID, err)
+		}
+	}
+	log.Printf("publish NNIDs: %d names, %d failed", len(names), failed)
 }

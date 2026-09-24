@@ -142,6 +142,13 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Publish the NNID on the link so the website and the app can show it and
+	// people can add each other by it. Best effort: the account works without
+	// it, and the startup pass in main publishes whatever this missed.
+	if err := s.core.PublishNNID(ctx, pid, userID); err != nil {
+		log.Printf("[POST] /v1/api/people: publish NNID for pid %d: %v", pid, err)
+	}
+
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`<person><pid>` + strconv.FormatInt(pid, 10) + `</pid></person>`))

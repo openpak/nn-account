@@ -6,7 +6,16 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
-## Unreleased
+## v0.8.0 — NNIDs on the Wii U link
+
+- The Nintendo Network ID is published on the account's Wii U link as its public code
+  (`Links.SetLinkPublicCode`, account `docs/public-codes.md`): at registration, and for every
+  existing PNID in a pass at startup (idempotent; it also repairs a registration whose publish
+  failed). The website and the app show it in the profile's friend codes, and the website's
+  add-friend dialog resolves a Wii U friend by it (website v0.56.0).
+- `internal/accountpb` refreshed from the core's `account/proto/openpak/account/v1`.
+
+## v0.7.0
 
 - Bans (website/docs/ban-lookup.md): the two v2 RPCs that still handed out credentials for a
   banned owner now refuse it. `GetNEXData` checks the owning account's core status like
