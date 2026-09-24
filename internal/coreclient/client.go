@@ -5,6 +5,7 @@ package coreclient
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -128,6 +129,31 @@ func (c *Client) ReserveAndActivateLink(ctx context.Context, namespace, subjectI
 	}
 	_, err = c.links.ActivateLink(rctx, &accountv1.ActivateLinkRequest{
 		LinkId: res.LinkId, IdempotencyKey: "register-" + subjectID,
+	})
+	return err
+}
+
+// PublishNNID puts the account's Nintendo Network ID on its Wii U link as the
+// link's public code (account docs/public-codes.md), so the website and the
+// app can show it and people can add each other by it. A link that already
+// carries it is left alone, which makes this safe to repeat. The core keys
+// lookups on the name's letters and digits, lower-cased, so "Leia.B" and
+// "leiab" resolve alike; two names that differ only in punctuation collide
+// and the second is refused with AlreadyExists.
+func (c *Client) PublishNNID(ctx context.Context, pid int64, username string) error {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	link, err := c.links.GetLinkBySubject(rctx, &accountv1.GetLinkBySubjectRequest{
+		Namespace: "wiiu", SubjectId: strconv.FormatInt(pid, 10),
+	})
+	if err != nil {
+		return err
+	}
+	if link.State != accountv1.LinkState_LINK_STATE_ACTIVE || link.PublicCode == username {
+		return nil
+	}
+	_, err = c.links.SetLinkPublicCode(rctx, &accountv1.SetLinkPublicCodeRequest{
+		LinkId: link.LinkId, PublicCode: username,
 	})
 	return err
 }
