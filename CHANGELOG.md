@@ -6,6 +6,14 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.8.1 — an emulator sign-in links its own family
+
+- Signing an account into Azahar or Cemu makes sure the account has an active link in that
+  family (`EnsureLink`). An account whose NNID was made on a Wii U had only a "wiiu" link, so
+  its 3DS friend code on Azahar never reached the website or the app; it now gets a "3ds"
+  link on the first Azahar sign-in, and the reverse for Cemu.
+- A Cemu sign-in publishes the NNID straight away instead of at the next restart.
+
 ## v0.8.0 — NNIDs on the Wii U link
 
 - The Nintendo Network ID is published on the account's Wii U link as its public code
