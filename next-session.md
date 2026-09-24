@@ -1,5 +1,5 @@
 # Next session — nn-account
-Updated 2026-09-15.
+Updated 2026-09-24.
 
 Pretendo's account server rewritten in Go as the Wii U/3DS adapter over the
 OpenPak account core: NNAS HTTP, NASC `/ac`, and the `account.v2` gRPC that
@@ -7,6 +7,11 @@ nn-friends and the content services consume. Deployed 2026-09-10 behind
 Traefik TLS (20050/20051), not console-verified — client builds exist
 (`nn-inkay` Wii U, `nn-nimbus` 3DS on `openpak-v1` 2026-09-12) but no console
 has signed in yet.
+
+Current status 2026-09-24: latest tag v0.8.1 (c3b3d78), `dev` clean. Since
+v0.6.0: v0.7.0 bans (`GetNEXData`/`ValidateIndependentServiceToken` refuse a
+banned owner), v0.8.0 NNID published on the Wii U link, v0.8.1 emulator
+sign-in links its own family; CI builds on `v*.*.*` tags only.
 
 ## Where things stand
 
@@ -21,12 +26,16 @@ has signed in yet.
   lets nn-friends publish "on Cemu"/"on Azahar". Also `/internal/resolve/{pid,account}`
   (resolvehttp, the plain-HTTP Resolution face for the Miiverse bridge; no
   tests of its own yet).
+- v0.7.0 (2026-09-23): the two v2 RPCs that still handed out credentials to a
+  banned owner (`GetNEXData`, `ValidateIndependentServiceToken`) refuse it.
+- v0.8.0/v0.8.1 (2026-09-24): the NNID is the Wii U link's public code (at
+  registration + startup pass); an Azahar/Cemu sign-in ensures a `3ds`/`wiiu`
+  link (`EnsureLink`) and a Cemu sign-in publishes the NNID at once.
 - M4 deferred with recorded reasons (docs/M0-INVENTORY.md): console
   email-confirm trio, `/@me` profile update, cert signature crypto with
   operator keys.
 - `src/` is the upstream TypeScript tree (Pretendo account/Juxt) kept for
   provenance; the container image builds only `cmd/nn-account`.
-- Also untracked: `CHANGELOG.md`, `prds/` (workspace-wide docs effort).
 - Integration suite runs the real core + Postgres through the full console
   journey plus ban/audience negatives: `go test -tags integration -race ./...`.
 
