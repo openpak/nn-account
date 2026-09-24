@@ -34,6 +34,21 @@ OpenPak work starts at the port/fork commit.
   ban: NNAS sign-in, refresh and every bearer call answer 0108 "Account has been banned",
   NASC answers 102, and `account_banned` revokes local tokens. No new environment variables.
 
+## v0.6.0 — NEX tokens know their client
+
+- NEX tokens record the client they were issued to: `X-OpenPak-Client` from Cemu (NNAS) or
+  Azahar (NASC LOGIN), else `wiiu`/`3ds` (migration 0005, `nex_tokens.client`).
+  `Resolution.ResolveNexTokenClient` lets nn-friends publish "Cemu"/"Azahar" vs the console.
+- `/internal/resolve/{pid,account}`: the Resolution mapping as JSON under `X-Internal-Key`,
+  for the TypeScript Miiverse bridge.
+- Integration tests cover header -> token -> client on both surfaces; the NASC journey reads
+  response fields by name.
+
+## v0.5.0 — 2026-09-13
+
+- Emulator surface: the identity carries the console password cache (NA-1a) and the PNID's
+  country and language. gofmt.
+
 ## v0.4.0 — 2026-09-11
 
 
