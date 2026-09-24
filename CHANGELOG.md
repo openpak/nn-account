@@ -6,6 +6,11 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.8.2 — 2026-09-24
+
+- deps: grpc 1.83.2, x/crypto 0.57, x/net 0.59, pgx 5.11 (Dependabot)
+- Removed the unused upstream package.json/package-lock.json (the Go server never used them)
+
 ## v0.8.1 — an emulator sign-in links its own family
 
 - Signing an account into Azahar or Cemu makes sure the account has an active link in that
