@@ -235,6 +235,10 @@ func TestAdapterConsoleJourney(t *testing.T) {
 	// The NEX token remembers its client: no header is the console, the
 	// emulator's X-OpenPak-Client names it.
 	res := resolution.New(pool, core)
+	// An unknown PID is "not found", not an internal error (it answered 500 until v0.8.3).
+	if r, err := res.ResolvePid(context.Background(), &resolutionv1.ResolvePidRequest{Namespace: "wiiu", Pid: 1}); err != nil || r.GetFound() {
+		t.Fatalf("unknown pid: %+v %v", r, err)
+	}
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: nexToken}); err != nil ||
 		!c.GetFound() || c.GetClient() != "wiiu" || c.GetPid() != uint32(pnid.PID) {
 		t.Fatalf("console token client: %+v %v", c, err)
