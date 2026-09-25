@@ -6,6 +6,10 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.8.3 — 2026-09-24
+
+- resolution: an unknown PID answers found=false instead of a 500 (the Miiverse chat bridge and /internal/resolve/pid)
+
 ## v0.8.2 — 2026-09-24
 
 - deps: grpc 1.83.2, x/crypto 0.57, x/net 0.59, pgx 5.11 (Dependabot)
