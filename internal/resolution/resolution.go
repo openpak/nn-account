@@ -35,7 +35,7 @@ func (s *Server) ResolvePid(ctx context.Context, req *resolutionv1.ResolvePidReq
 		return nil, status.Error(codes.InvalidArgument, "namespace must be wiiu or 3ds")
 	}
 	pnid, err := store.GetPNIDByPID(ctx, s.pool, int64(req.GetPid()))
-	if errors.Is(err, store.ErrNotFound) {
+	if errors.Is(err, store.ErrNotFound) || errors.Is(err, pgx.ErrNoRows) {
 		return &resolutionv1.ResolvePidResponse{Found: false}, nil
 	}
 	if err != nil {
