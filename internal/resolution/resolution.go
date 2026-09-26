@@ -182,19 +182,19 @@ func nnidFromDisplayName(name string) string {
 	return string(b)
 }
 
-// ResolveNexTokenClient reads back the client a NEX token was issued to
-// (package clientid). The caller has already had the token validated through
+// ResolveNexTokenClient reads back the client a NEX token was issued to and
+// the OS it runs on (package clientid). The caller has already had the token validated through
 // ExchangeNEXTokenForUserData; this only names where it came from.
 func (s *Server) ResolveNexTokenClient(ctx context.Context, req *resolutionv1.ResolveNexTokenClientRequest) (*resolutionv1.ResolveNexTokenClientResponse, error) {
 	if req.GetToken() == "" {
 		return nil, status.Error(codes.InvalidArgument, "token is required")
 	}
-	client, pid, err := store.GetNEXTokenClient(ctx, s.pool, req.GetToken())
+	client, os, pid, err := store.GetNEXTokenClient(ctx, s.pool, req.GetToken())
 	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, store.ErrNotFound) {
 		return &resolutionv1.ResolveNexTokenClientResponse{Found: false}, nil
 	}
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-	return &resolutionv1.ResolveNexTokenClientResponse{Found: true, Client: client, Pid: uint32(pid)}, nil
+	return &resolutionv1.ResolveNexTokenClientResponse{Found: true, Client: client, Os: os, Pid: uint32(pid)}, nil
 }

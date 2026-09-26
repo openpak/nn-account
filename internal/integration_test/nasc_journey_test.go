@@ -161,7 +161,7 @@ func TestNASC3DSJourney(t *testing.T) {
 	// --- 3b. The token remembers its client: the console, then Azahar ---
 	res := resolution.New(pool, core)
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: token}); err != nil ||
-		!c.GetFound() || c.GetClient() != "3ds" || c.GetPid() != uint32(nexPID) {
+		!c.GetFound() || c.GetClient() != "3ds" || c.GetOs() != "" || c.GetPid() != uint32(nexPID) {
 		t.Fatalf("console token client: %+v %v", c, err)
 	}
 	loginFields := map[string]string{
@@ -176,13 +176,13 @@ func TestNASC3DSJourney(t *testing.T) {
 		"passwd":     nenc("3dsNEXsecret42"),
 		"uidhmac":    nenc("hmac-value"),
 	}
-	code, body = postNASCAs(t, nascSrv, loginFields, "azahar/2125.0")
+	code, body = postNASCAs(t, nascSrv, loginFields, "azahar/2125.0 (android)")
 	azaharToken := nascParam(body, "token")
 	if code != 200 || azaharToken == "" {
 		t.Fatalf("azahar LOGIN failed: %d %s", code, body)
 	}
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: azaharToken}); err != nil ||
-		!c.GetFound() || c.GetClient() != "azahar" {
+		!c.GetFound() || c.GetClient() != "azahar" || c.GetOs() != "android" {
 		t.Fatalf("azahar token client: %+v %v", c, err)
 	}
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: "no-such-token"}); err != nil || c.GetFound() {
