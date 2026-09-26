@@ -87,7 +87,9 @@ func run() error {
 	if cfg.InternalKey != "" {
 		// Longest pattern wins: the resolve facade sits beside the emulator
 		// surface under the one internal key.
-		mux.Handle("/internal/resolve/", resolvehttp.New(pool, core, cfg.InternalKey))
+		resolveHTTP := resolvehttp.New(pool, core, cfg.InternalKey)
+		mux.Handle("/internal/resolve/", resolveHTTP)
+		mux.Handle("/internal/online", resolveHTTP)
 		mux.Handle("/internal/", emulator.New(pool, core, cfg.InternalKey))
 	}
 
