@@ -490,6 +490,6 @@ These questions do not prevent M0 or a draft PRD; they gate the indicated downst
 - Sibling `nn-friends` checkout: `go.mod`, `utility/authentication.go`,
   `globals/get_user_data.go`, `globals/account_details_by_pid.go`,
   `globals/account_details_by_username.go`, and `database/`.
-- Workspace planning documents: `../research-third-party-networks.md` and
+- Workspace planning documents: <https://github.com/openpak/docs/blob/main/research/research-third-party-networks.md> and
   `../openpak-bootstrap-prompt.md`. This PRD specializes their account scope; draft
   proposals here do not silently supersede confirmed product decisions.
