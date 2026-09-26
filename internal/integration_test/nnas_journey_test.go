@@ -240,13 +240,13 @@ func TestAdapterConsoleJourney(t *testing.T) {
 		t.Fatalf("unknown pid: %+v %v", r, err)
 	}
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: nexToken}); err != nil ||
-		!c.GetFound() || c.GetClient() != "wiiu" || c.GetPid() != uint32(pnid.PID) {
+		!c.GetFound() || c.GetClient() != "wiiu" || c.GetOs() != "" || c.GetPid() != uint32(pnid.PID) {
 		t.Fatalf("console token client: %+v %v", c, err)
 	}
 	cemuReq := httptest.NewRequest("GET", "/v1/api/provider/nex_token/@me?game_server_id=00003200", nil)
 	cemuReq.Header.Set("Authorization", "Bearer "+accessToken)
 	cemuReq.Header.Set("X-Nintendo-Title-ID", "0005000010143500")
-	cemuReq.Header.Set("X-OpenPak-Client", "cemu/2.6")
+	cemuReq.Header.Set("X-OpenPak-Client", "cemu/2.6 (Linux)")
 	cemuRec := httptest.NewRecorder()
 	nnasSrv.ServeHTTP(cemuRec, cemuReq)
 	cemuToken := between(cemuRec.Body.String(), "<token>", "</token>")
@@ -254,7 +254,7 @@ func TestAdapterConsoleJourney(t *testing.T) {
 		t.Fatalf("cemu nex token: %d %s", cemuRec.Code, cemuRec.Body.String())
 	}
 	if c, err := res.ResolveNexTokenClient(context.Background(), &resolutionv1.ResolveNexTokenClientRequest{Token: cemuToken}); err != nil ||
-		!c.GetFound() || c.GetClient() != "cemu" {
+		!c.GetFound() || c.GetClient() != "cemu" || c.GetOs() != "linux" {
 		t.Fatalf("cemu token client: %+v %v", c, err)
 	}
 
@@ -574,7 +574,7 @@ func TestExchangeAudienceRegistered(t *testing.T) {
 
 	// Mint a NEX token bound to an UNREGISTERED game server id directly.
 	now := time.Now()
-	if err := store.InsertNEXToken(ctx, pool, "rogue-token", "9999abcd", pnid.PID, 0, now, now.Add(time.Hour), "wiiu"); err != nil {
+	if err := store.InsertNEXToken(ctx, pool, "rogue-token", "9999abcd", pnid.PID, 0, now, now.Add(time.Hour), "wiiu", ""); err != nil {
 		t.Fatal(err)
 	}
 	gctx := metadata.AppendToOutgoingContext(ctx, "X-API-Key", "adapter-grpc-key-0123456789abcdef")
@@ -584,7 +584,7 @@ func TestExchangeAudienceRegistered(t *testing.T) {
 		t.Fatal("unregistered audience must be rejected even with empty list")
 	}
 	// The registered server still exchanges with an empty list.
-	if err := store.InsertNEXToken(ctx, pool, "good-token", "00003200", pnid.PID, 0, now, now.Add(time.Hour), "wiiu"); err != nil {
+	if err := store.InsertNEXToken(ctx, pool, "good-token", "00003200", pnid.PID, 0, now, now.Add(time.Hour), "wiiu", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := v2.ExchangeNEXTokenForUserData(gctx, &pb.ExchangeNEXTokenForUserDataRequest{

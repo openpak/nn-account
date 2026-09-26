@@ -37,7 +37,8 @@ type ResolutionClient interface {
 	ResolveAccount(ctx context.Context, in *ResolveAccountRequest, opts ...grpc.CallOption) (*ResolveAccountResponse, error)
 	// What a NEX token was issued to: "wiiu"/"3ds" for a console, or the
 	// emulator that asked for it ("cemu", "azahar"), so nn-friends can publish
-	// presence as "on Cemu" for the same PNID a console also uses.
+	// presence as "on Cemu" for the same PNID a console also uses, and the OS
+	// it runs on, which nn-friends passes on with the core session.
 	ResolveNexTokenClient(ctx context.Context, in *ResolveNexTokenClientRequest, opts ...grpc.CallOption) (*ResolveNexTokenClientResponse, error)
 }
 
@@ -92,7 +93,8 @@ type ResolutionServer interface {
 	ResolveAccount(context.Context, *ResolveAccountRequest) (*ResolveAccountResponse, error)
 	// What a NEX token was issued to: "wiiu"/"3ds" for a console, or the
 	// emulator that asked for it ("cemu", "azahar"), so nn-friends can publish
-	// presence as "on Cemu" for the same PNID a console also uses.
+	// presence as "on Cemu" for the same PNID a console also uses, and the OS
+	// it runs on, which nn-friends passes on with the core session.
 	ResolveNexTokenClient(context.Context, *ResolveNexTokenClientRequest) (*ResolveNexTokenClientResponse, error)
 	mustEmbedUnimplementedResolutionServer()
 }

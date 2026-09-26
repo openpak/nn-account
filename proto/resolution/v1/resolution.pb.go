@@ -280,8 +280,12 @@ type ResolveNexTokenClientResponse struct {
 	// false: no live token by that value.
 	Found bool `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
 	// "" for tokens issued before clients were recorded.
-	Client        string `protobuf:"bytes,2,opt,name=client,proto3" json:"client,omitempty"`
-	Pid           uint32 `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
+	Client string `protobuf:"bytes,2,opt,name=client,proto3" json:"client,omitempty"`
+	Pid    uint32 `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
+	// The OS the emulator said it runs on ("windows", "macos", "linux",
+	// "android", "ios"); "" for a console, when it did not say, and for tokens
+	// issued before OSes were recorded.
+	Os            string `protobuf:"bytes,4,opt,name=os,proto3" json:"os,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -337,6 +341,13 @@ func (x *ResolveNexTokenClientResponse) GetPid() uint32 {
 	return 0
 }
 
+func (x *ResolveNexTokenClientResponse) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
 var File_proto_resolution_v1_resolution_proto protoreflect.FileDescriptor
 
 const file_proto_resolution_v1_resolution_proto_rawDesc = "" +
@@ -357,11 +368,12 @@ const file_proto_resolution_v1_resolution_proto_rawDesc = "" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x10\n" +
 	"\x03pid\x18\x02 \x01(\rR\x03pid\"4\n" +
 	"\x1cResolveNexTokenClientRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"_\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"o\n" +
 	"\x1dResolveNexTokenClientResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12\x16\n" +
 	"\x06client\x18\x02 \x01(\tR\x06client\x12\x10\n" +
-	"\x03pid\x18\x03 \x01(\rR\x03pid2\xf5\x02\n" +
+	"\x03pid\x18\x03 \x01(\rR\x03pid\x12\x0e\n" +
+	"\x02os\x18\x04 \x01(\tR\x02os2\xf5\x02\n" +
 	"\n" +
 	"Resolution\x12g\n" +
 	"\n" +

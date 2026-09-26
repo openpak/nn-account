@@ -13,7 +13,8 @@ service Resolution {
   rpc ResolveAccount(ResolveAccountRequest) returns (ResolveAccountResponse);
   // What a NEX token was issued to: "wiiu"/"3ds" for a console, or the
   // emulator that asked for it ("cemu", "azahar"), so nn-friends can publish
-  // presence as "on Cemu" for the same PNID a console also uses.
+  // presence as "on Cemu" for the same PNID a console also uses, and the OS
+  // it runs on, which nn-friends passes on with the core session.
   rpc ResolveNexTokenClient(ResolveNexTokenClientRequest) returns (ResolveNexTokenClientResponse);
 }
 
@@ -49,4 +50,8 @@ message ResolveNexTokenClientResponse {
   // "" for tokens issued before clients were recorded.
   string client = 2;
   uint32 pid = 3;
+  // The OS the emulator said it runs on ("windows", "macos", "linux",
+  // "android", "ios"); "" for a console, when it did not say, and for tokens
+  // issued before OSes were recorded.
+  string os = 4;
 }

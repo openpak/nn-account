@@ -13,6 +13,7 @@ func TestParse(t *testing.T) {
 		"":                                  "",
 		"/1.0":                              "",
 		"cemu 2.6":                          "",
+		"cemu/2.6 (linux)":                  "cemu",
 		"<script>/1":                        "",
 		"abcdefghijklmnopqrstuvwxyzabcdefg": "",
 	} {
@@ -34,5 +35,28 @@ func TestOf(t *testing.T) {
 	r.Header.Set(Header, "bad value/1")
 	if got := Of(r, "3ds"); got != "3ds" {
 		t.Fatalf("bad header: %q, want the console", got)
+	}
+}
+
+func TestParseOS(t *testing.T) {
+	for in, want := range map[string]string{
+		"cemu/2.6 (Linux)":      "linux",
+		"azahar/2123 (android)": "android",
+		"cemu/2.6":              "",
+		"cemu/2.6 (beos)":       "",
+		"":                      "",
+		"cemu/2.6 (windows":     "",
+	} {
+		if got := ParseOS(in); got != want {
+			t.Errorf("ParseOS(%q) = %q, want %q", in, got, want)
+		}
+	}
+	r := httptest.NewRequest("GET", "/", nil)
+	if got := OSOf(r); got != "" {
+		t.Fatalf("no header: %q", got)
+	}
+	r.Header.Set(Header, "azahar/2125.0 (Windows)")
+	if got := OSOf(r); got != "windows" {
+		t.Fatalf("azahar header: %q", got)
 	}
 }
