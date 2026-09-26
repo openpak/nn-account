@@ -234,17 +234,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "LOGIN":
-		s.respondLogin(ctx, w, server, nexAccount, titleID, ip, port, clientid.Of(r, "3ds"))
+		s.respondLogin(ctx, w, server, nexAccount, titleID, ip, port, clientid.Of(r, "3ds"), clientid.OSOf(r))
 	case "SVCLOC":
 		s.respondServiceToken(ctx, w, server, nexAccount, titleID, p.Get("keyhash"))
 	}
 }
 
-func (s *Server) respondLogin(ctx context.Context, w http.ResponseWriter, server *store.Server, nexAccount *store.NEXAccount, titleID, ip string, port int32, client string) {
+func (s *Server) respondLogin(ctx context.Context, w http.ResponseWriter, server *store.Server, nexAccount *store.NEXAccount, titleID, ip string, port int32, client, os string) {
 	token := nintendoEncodeBytes(nintendoRandomBytes(112))
 	now := time.Now()
 	if err := store.InsertNEXToken(ctx, s.pool, token, server.GameServerID, nexAccount.PID,
-		int64(parseHexUint64(titleID)), now, now.Add(time.Hour), client); err != nil {
+		int64(parseHexUint64(titleID)), now, now.Add(time.Hour), client, os); err != nil {
 		s.writeError(w, "110")
 		return
 	}

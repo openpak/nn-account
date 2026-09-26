@@ -6,6 +6,15 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.9.0 — 2026-09-26
+
+- NEX tokens remember the OS an emulator runs on. `X-OpenPak-Client` may now carry it
+  (`cemu/2.6 (linux)`); `clientid.ParseOS`/`OSOf` read windows, macos, linux, android or ios
+  (anything else, or none, is ""). Both the NNAS `nex_token` and the NASC `LOGIN` store it
+  next to the client (migration `0006_nex_token_os.sql`, additive, old rows ''), and
+  `Resolution.ResolveNexTokenClient` returns it as `os` (field 4) for nn-friends to pass on
+  with the core session. Vendored account proto refreshed (core v0.11.0: `os`, `GetPlaytime`).
+
 ## v0.8.3 — 2026-09-25
 
 - resolution: an unknown PID answers found=false instead of a 500 (the Miiverse chat bridge and /internal/resolve/pid)
