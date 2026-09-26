@@ -27,6 +27,9 @@ type Server struct {
 	pool *pgxpool.Pool
 	core CorePort
 	cdn  string
+
+	// nexLookup replaces nexPassword in tests (it needs the database).
+	nexLookup func(ctx context.Context, pid int64) (*store.NEXAccount, string, error)
 }
 
 // CorePort is the subset of the account core the adapter's v2 RPCs consult.
@@ -111,13 +114,33 @@ func (s *Server) GetUserData(ctx context.Context, req *pb.GetUserDataRequest) (*
 // GetNEXPassword ports upstream GetNEXPassword. Credentials may only be
 // retrieved by authorized Nintendo services (PRD FR-3): the X-API-Key gate
 // is that authorization; the PID must map to a live, unbanned identity.
+//
+// It is also the login signal for playtime: a Wii U/3DS NEX game server asks
+// for this password exactly when a player connects to it, so a successful
+// answer marks the owning account online in the core (see markOnline).
 func (s *Server) GetNEXPassword(ctx context.Context, req *pb.GetNEXPasswordRequest) (*pb.GetNEXPasswordResponse, error) {
-	nex, err := store.GetNEXAccountByPID(ctx, s.pool, int64(req.GetPid()))
+	lookup := s.nexLookup
+	if lookup == nil {
+		lookup = s.nexPassword
+	}
+	nex, accountID, err := lookup(ctx, int64(req.GetPid()))
+	if err != nil {
+		return nil, err
+	}
+	s.markOnline(accountID, nex.DeviceType)
+	return &pb.GetNEXPasswordResponse{Password: nex.Password}, nil
+}
+
+// nexPassword is GetNEXPassword's lookup: the NEX account for pid and, when a
+// PNID owns it, that PNID's core account (checked live, unbanned and linked).
+// A device-only record answers with no account.
+func (s *Server) nexPassword(ctx context.Context, pid int64) (*store.NEXAccount, string, error) {
+	nex, err := store.GetNEXAccountByPID(ctx, s.pool, pid)
 	if errors.Is(err, store.ErrNotFound) || errors.Is(err, pgxNoRows()) {
-		return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+		return nil, "", status.Error(codes.InvalidArgument, "No NEX account found")
 	}
 	if err != nil {
-		return nil, status.Error(codes.Internal, "Internal error")
+		return nil, "", status.Error(codes.Internal, "Internal error")
 	}
 	// Device-only provisional identities have no owning PNID: no user data
 	// to expose (FR-2). Only their NEX password is resolvable by authorized
@@ -125,21 +148,22 @@ func (s *Server) GetNEXPassword(ctx context.Context, req *pb.GetNEXPasswordReque
 	if nex.OwningPID != nil {
 		pnid, err := store.GetPNIDByPID(ctx, s.pool, *nex.OwningPID)
 		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+			return nil, "", status.Error(codes.InvalidArgument, "No NEX account found")
 		}
 		if pnid.Deleted {
-			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
+			return nil, "", status.Error(codes.InvalidArgument, "No NEX account found")
 		}
 		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		// Active-link enforcement (review P1 #3): unlinked consoles lose
 		// NEX credential access immediately.
 		if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {
-			return nil, err
+			return nil, "", err
 		}
+		return nex, pnid.AccountID, nil
 	}
-	return &pb.GetNEXPasswordResponse{Password: nex.Password}, nil
+	return nex, "", nil
 }
 
 // ExchangeNEXTokenForUserData ports upstream with the PRD-mandated fixes

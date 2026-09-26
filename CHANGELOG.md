@@ -6,6 +6,17 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.10.0 — 2026-09-26
+
+- playtime: a game server's login is the signal. After a successful `GetNEXPassword` (the v2
+  gRPC every Wii U/3DS NEX title server calls when a player connects), the owning PNID's core
+  account is sent to the core's `Sessions.MarkOnline` (title empty), which starts the playtime
+  clock on the player's live titled session. The namespace is the NEX account's `device_type`
+  (`wiiu` or `3ds`). Fire and forget on its own goroutine with a 5 s timeout, so the login is
+  never slowed or failed by it; failures are logged at most once a minute. Device-only NEX
+  records and failed lookups mark nobody. The core client gains a Sessions client on its
+  existing connection. Vendored account proto refreshed (core v0.12.0: `MarkOnline`).
+
 ## v0.9.0 — 2026-09-26
 
 - NEX tokens remember the OS an emulator runs on. `X-OpenPak-Client` may now carry it
