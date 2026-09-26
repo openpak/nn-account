@@ -6,15 +6,6 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
-## v0.10.0 — 2026-09-26
-
-- internal: `POST /internal/online` — game servers' roll call for playtime. Body
-  `{"namespace":"wiiu"|"3ds","title_id":"optional","pids":[…]}` (at most 1000, else 400); each
-  pid is resolved like `/internal/resolve/pid` (unknown skipped) and sent to the core's
-  `Sessions.MarkOnline` in one call. Answers `{"marked":N,"unknown":M}`. Same
-  `X-Internal-Key` (`NN_ACCOUNT_INTERNAL_KEY`) guard. The core client gains a Sessions client
-  on its existing connection. Vendored account proto refreshed (core v0.12.0: `MarkOnline`).
-
 ## v0.9.0 — 2026-09-26
 
 - NEX tokens remember the OS an emulator runs on. `X-OpenPak-Client` may now carry it
