@@ -16,6 +16,8 @@ OpenPak work starts at the port/fork commit.
   never slowed or failed by it; failures are logged at most once a minute. Device-only NEX
   records and failed lookups mark nobody. The core client gains a Sessions client on its
   existing connection. Vendored account proto refreshed (core v0.12.0: `MarkOnline`).
+- The friends server asks for the password too, whenever a console connects; its calls carry
+  `X-OpenPak-Caller: friends` (nn-friends v0.6.1) and mark nobody.
 
 ## v0.9.0 — 2026-09-26
 
