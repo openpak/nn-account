@@ -3,6 +3,7 @@ package grpcv2
 import (
 	"context"
 	"errors"
+	"google.golang.org/grpc/metadata"
 	"sync"
 	"testing"
 	"time"
@@ -83,6 +84,16 @@ func TestGetNEXPasswordMarksTheAccountOnline(t *testing.T) {
 	}
 	if !got["wiiu"] || !got["3ds"] {
 		t.Fatalf("namespaces %v", got)
+	}
+
+	// The friends server asks too, whenever a console connects: that marks nobody.
+	before := len(core.players)
+	fctx := metadata.NewIncomingContext(ctx, metadata.Pairs("X-OpenPak-Caller", "friends"))
+	if res, err := s.GetNEXPassword(fctx, &pb.GetNEXPasswordRequest{Pid: 1}); err != nil || res.GetPassword() != "pw1" {
+		t.Fatalf("friends lookup: %v %v", res, err)
+	}
+	if len(core.players) != before {
+		t.Fatalf("a friends lookup marked someone online: %v", core.players[before:])
 	}
 
 	// A failing core does not touch the answer.

@@ -127,8 +127,19 @@ func (s *Server) GetNEXPassword(ctx context.Context, req *pb.GetNEXPasswordReque
 	if err != nil {
 		return nil, err
 	}
-	s.markOnline(accountID, nex.DeviceType)
+	if !fromFriends(ctx) {
+		s.markOnline(accountID, nex.DeviceType)
+	}
 	return &pb.GetNEXPasswordResponse{Password: nex.Password}, nil
+}
+
+// fromFriends is true when nn-friends is asking (it sends X-OpenPak-Caller:
+// friends): the friends server wants the password whenever a console connects,
+// which is not a game reaching its server, so it must not mark anyone online.
+func fromFriends(ctx context.Context) bool {
+	md, _ := metadata.FromIncomingContext(ctx)
+	v := md.Get("X-OpenPak-Caller")
+	return len(v) > 0 && v[0] == "friends"
 }
 
 // nexPassword is GetNEXPassword's lookup: the NEX account for pid and, when a
