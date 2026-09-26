@@ -24,6 +24,7 @@ type Client struct {
 	links  accountv1.LinksClient
 	events accountv1.EventsClient
 	reg    accountv1.RegistrationClient
+	sess   accountv1.SessionsClient
 }
 
 func Dial(ctx context.Context, addr, internalKey string) (*Client, error) {
@@ -36,6 +37,7 @@ func Dial(ctx context.Context, addr, internalKey string) (*Client, error) {
 		links:  accountv1.NewLinksClient(conn),
 		events: accountv1.NewEventsClient(conn),
 		reg:    accountv1.NewRegistrationClient(conn),
+		sess:   accountv1.NewSessionsClient(conn),
 	}
 	return c, nil
 }
@@ -226,4 +228,16 @@ func (c *Client) RequestAccountDeletion(ctx context.Context, accountID string) e
 		CallerNamespace: "wiiu", Purpose: "console_deletion", AccountId: accountID,
 	})
 	return err
+}
+
+// MarkOnline tells the core these players were just confirmed online by a
+// game server, which is where their playtime starts. At most 1000 per call.
+func (c *Client) MarkOnline(ctx context.Context, players []*accountv1.OnlinePlayer) (int32, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	resp, err := c.sess.MarkOnline(rctx, &accountv1.MarkOnlineRequest{Players: players})
+	if err != nil {
+		return 0, err
+	}
+	return resp.GetMarked(), nil
 }
