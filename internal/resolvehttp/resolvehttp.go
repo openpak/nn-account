@@ -12,10 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
-
-	accountv1 "openpak/nn-account/internal/accountpb"
 
 	"openpak/nn-account/internal/resolution"
 	resolutionv1 "openpak/nn-account/proto/resolution/v1"
@@ -28,22 +25,10 @@ import (
 type Server struct {
 	res *resolution.Server
 	key string
-
-	// resolve and mark back POST /internal/online; tests replace them.
-	resolve func(ctx context.Context, ns string, pid uint32) (string, error)
-	mark    func(ctx context.Context, players []*accountv1.OnlinePlayer) (int32, error)
 }
 
 func New(pool *pgxpool.Pool, core *coreclient.Client, key string) *Server {
-	s := &Server{res: resolution.New(pool, core), key: key, mark: core.MarkOnline}
-	s.resolve = func(ctx context.Context, ns string, pid uint32) (string, error) {
-		resp, err := s.res.ResolvePid(ctx, &resolutionv1.ResolvePidRequest{Namespace: ns, Pid: pid})
-		if err != nil || !resp.GetFound() {
-			return "", err
-		}
-		return resp.GetAccountId(), nil
-	}
-	return s
+	return &Server{res: resolution.New(pool, core), key: key}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -56,8 +41,6 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.pid(w, r)
 	case "/internal/resolve/account":
 		s.account(w, r)
-	case "/internal/online":
-		s.online(w, r)
 	default:
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 	}
@@ -97,65 +80,6 @@ func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOut(w, map[string]any{"found": resp.GetFound(), "pid": resp.GetPid()})
-}
-
-// maxOnline matches the core's per-call cap on MarkOnline.
-const maxOnline = 1000
-
-// online is a game server's roll call: POST /internal/online
-// {"namespace":"wiiu"|"3ds","title_id":"optional","pids":[…]} -> {"marked":N,"unknown":M}.
-// Playtime counts only time a game server confirmed the player online, and
-// game servers hold no core credentials, so they report here. Each pid is
-// resolved exactly as /internal/resolve/pid does; unknown ones are skipped.
-func (s *Server) online(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, `{"error":"POST only"}`, http.StatusMethodNotAllowed)
-		return
-	}
-	var in struct {
-		Namespace string   `json:"namespace"`
-		TitleID   string   `json:"title_id"`
-		PIDs      []uint32 `json:"pids"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil ||
-		(in.Namespace != "wiiu" && in.Namespace != "3ds") {
-		http.Error(w, `{"error":"namespace (wiiu or 3ds) and pids are required"}`, http.StatusBadRequest)
-		return
-	}
-	if len(in.PIDs) > maxOnline {
-		http.Error(w, `{"error":"at most 1000 pids per call"}`, http.StatusBadRequest)
-		return
-	}
-	title := strings.ToLower(in.TitleID)
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-	seen := map[string]bool{}
-	players := make([]*accountv1.OnlinePlayer, 0, len(in.PIDs))
-	unknown := 0
-	for _, pid := range in.PIDs {
-		id, err := s.resolve(ctx, in.Namespace, pid)
-		if err != nil {
-			log.Printf("resolvehttp: online pid %d: %v", pid, err)
-		}
-		if id == "" {
-			unknown++
-			continue
-		}
-		if !seen[id] {
-			seen[id] = true
-			players = append(players, &accountv1.OnlinePlayer{AccountId: id, Namespace: in.Namespace, TitleId: title})
-		}
-	}
-	var marked int32
-	if len(players) > 0 {
-		var err error
-		if marked, err = s.mark(ctx, players); err != nil {
-			log.Printf("resolvehttp: mark online: %v", err)
-			http.Error(w, `{"error":"core unavailable"}`, http.StatusBadGateway)
-			return
-		}
-	}
-	jsonOut(w, map[string]any{"marked": marked, "unknown": unknown})
 }
 
 func jsonOut(w http.ResponseWriter, v any) {
