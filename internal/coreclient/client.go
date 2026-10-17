@@ -241,3 +241,20 @@ func (c *Client) MarkOnline(ctx context.Context, players []*accountv1.OnlinePlay
 	}
 	return resp.GetMarked(), nil
 }
+
+// AccountPage returns one keyset page of active core account IDs (after is the
+// last ID of the previous page, "" to start) and the cursor for the next page,
+// "" when the listing is exhausted.
+func (c *Client) AccountPage(ctx context.Context, after string) ([]string, string, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 15*time.Second)
+	defer cancel()
+	r, err := c.ident.ListAccounts(rctx, &accountv1.ListAccountsRequest{AfterAccountId: after, Limit: 200})
+	if err != nil {
+		return nil, "", err
+	}
+	ids := make([]string, 0, len(r.Accounts))
+	for _, a := range r.Accounts {
+		ids = append(ids, a.AccountId)
+	}
+	return ids, r.NextAfterAccountId, nil
+}
