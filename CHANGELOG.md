@@ -6,6 +6,14 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.11.0 — 2026-10-17
+
+- provisioning: every active core account now has an identity and an active link in both the
+  `wiiu` and `3ds` namespaces, whether or not the person ever used either console. A reconcile
+  loop pages the core's `Identity.ListAccounts` at startup and every 60 s and runs the existing
+  emulator `Ensure` for both families (idempotent; one failing account does not stop the pass;
+  only counts are logged). `internal/accountpb` account stubs refreshed from the core v0.16.0.
+
 ## v0.10.0 — 2026-09-26
 
 - playtime: a game server's login is the signal. After a successful `GetNEXPassword` (the v2

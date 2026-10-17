@@ -110,6 +110,8 @@ func run() error {
 	// Accounts made before NNIDs were published on their links, and any
 	// registration whose publish failed, get theirs now. Idempotent.
 	go publishNNIDs(ctx, pool, core)
+	// Every active core account gets a wiiu and a 3ds link, used or not.
+	go emulator.New(pool, core, cfg.InternalKey).Reconcile(ctx, 60*time.Second)
 
 	log.Printf("nn-account adapter listening: grpc=%s http=%s", cfg.GRPCListenAddr, cfg.HTTPListenAddr)
 
