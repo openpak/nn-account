@@ -122,6 +122,7 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, *store.PNID)
 			writeXMLErr(w, http.StatusBadRequest, "", "0108", "Account has been banned")
 			return
 		}
+		pnid.MiiName = store.ProfileName(acct.GetDisplayName())
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxPNID, pnid)), pnid)
 	}
 }

@@ -58,7 +58,7 @@ func Interceptor(apiKey string) grpc.UnaryServerInterceptor {
 	}
 }
 
-func (s *Server) checkCoreStatus(ctx context.Context, accountID string) error {
+func (s *Server) checkCoreStatus(ctx context.Context, accountID string, profiles ...*store.PNID) error {
 	// Fail-closed: unreachable core denies new authorization (PRD §7).
 	acct, err := s.core.GetAccount(ctx, accountID)
 	if err != nil {
@@ -69,6 +69,9 @@ func (s *Server) checkCoreStatus(ctx context.Context, accountID string) error {
 		accountv1.AccountStatus_ACCOUNT_STATUS_DELETED,
 		accountv1.AccountStatus_ACCOUNT_STATUS_DELETION_PENDING:
 		return status.Error(codes.InvalidArgument, "Account is banned or deleted")
+	}
+	for _, p := range profiles {
+		p.MiiName = store.ProfileName(acct.GetDisplayName())
 	}
 	return nil
 }
@@ -87,7 +90,7 @@ func (s *Server) GetUserData(ctx context.Context, req *pb.GetUserDataRequest) (*
 	if pnid.Deleted {
 		return &pb.GetUserDataResponse{Deleted: true, Pid: uint32(pnid.PID)}, nil
 	}
-	if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+	if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 		return nil, err
 	}
 	if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil && !pnid.Shadow {
@@ -164,7 +167,7 @@ func (s *Server) nexPassword(ctx context.Context, pid int64) (*store.NEXAccount,
 		if pnid.Deleted {
 			return nil, "", status.Error(codes.InvalidArgument, "No NEX account found")
 		}
-		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+		if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 			return nil, "", err
 		}
 		// Active-link enforcement (review P1 #3): unlinked consoles lose
@@ -238,7 +241,7 @@ func (s *Server) ExchangeNEXTokenForUserData(ctx context.Context, req *pb.Exchan
 		if pnid.Deleted {
 			return nil, status.Error(codes.InvalidArgument, "Invalid token. No user found")
 		}
-		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+		if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 			return nil, err
 		}
 		if err := s.checkActiveLink(ctx, pnid.AccountID, pnid.PID); err != nil {

@@ -45,6 +45,7 @@ func (s *Server) settingsAuth(next func(http.ResponseWriter, *http.Request, *sto
 			w.WriteHeader(http.StatusGatewayTimeout)
 			return
 		}
+		pnid.MiiName = store.ProfileName(acct.GetDisplayName())
 		next(w, r, pnid)
 	}
 }
@@ -67,7 +68,6 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request, pn
 	tzName := r.FormValue("tz_name")
 	regionStr := r.FormValue("region")
 	country := r.FormValue("country")
-	miiName := r.FormValue("mii.name")
 	miiData := r.FormValue("mii.data")
 
 	updates := map[string]any{}
@@ -82,8 +82,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request, pn
 			updates["region"] = int32(n)
 		}
 	}
-	if miiName != "" && miiData != "" {
-		updates["mii_name"] = miiName
+	if miiData != "" {
 		updates["mii_data"] = miiData
 	}
 	if err := store.UpdatePNIDSettings(r.Context(), s.pool, pnid.PID, updates); err != nil {
@@ -167,7 +166,7 @@ func settingsPageHTML(p *store.PNID, notice string) string {
 	b.WriteString(`<form method="post" action="/v1/api/account_settings/update">`)
 	b.WriteString(`<h1>OpenPak ID settings</h1>`)
 	b.WriteString(`<p>Account: ` + escapeXML(p.Username) + ` (PID ` + strconv.FormatInt(p.PID, 10) + `)</p>`)
-	b.WriteString(`<label for="mii_name">Mii name</label><input id="mii_name" name="mii.name" value="` + escapeXML(p.MiiName) + `">`)
+	b.WriteString(`<p>Account name: ` + escapeXML(p.MiiName) + `. Edit your account name on the OpenPak website.</p>`)
 	b.WriteString(`<label for="mii_data">Mii data</label><textarea id="mii_data" name="mii.data" rows="3">` + escapeXML(p.MiiData) + `</textarea>`)
 	b.WriteString(`<label for="country">Country</label><input id="country" name="country" value="` + escapeXML(p.Country) + `">`)
 	b.WriteString(`<label for="tz_name">Time zone</label><input id="tz_name" name="tz_name" value="` + escapeXML(p.TimezoneName) + `">`)

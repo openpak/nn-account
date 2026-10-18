@@ -163,6 +163,9 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 						}
 					}
 				}
+				if applyErr == nil && ev.GetType() == "account_deleted" {
+					applyErr = store.ReleaseDeletedHandle(ctx, pool, ev.GetAccountId())
+				}
 			case "link_unlinked":
 				if ev.GetSubjectId() != "" {
 					var pid int64
