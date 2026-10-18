@@ -167,11 +167,11 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 					applyErr = store.ReleaseDeletedHandle(ctx, pool, ev.GetAccountId())
 				}
 			case "link_unlinked":
-				if ev.GetSubjectId() != "" {
-					var pid int64
-					if pid, applyErr = strconvI(ev.GetSubjectId()); applyErr == nil {
-						applyErr = store.RevokeTokensForPID(ctx, pool, pid)
-					}
+				var pid int64
+				var relevant bool
+				pid, relevant, applyErr = unlinkedConsolePID(ev.GetNamespace(), ev.GetSubjectId())
+				if relevant && applyErr == nil {
+					applyErr = store.RevokeTokensForPID(ctx, pool, pid)
 				}
 			case "account_unbanned":
 				// Nothing to re-arm locally; ban revocations are permanent.
@@ -208,7 +208,15 @@ func sleepCtx(ctx context.Context, d time.Duration) {
 	}
 }
 
-func strconvI(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
+// Other networks can use either numeric subjects or non-decimal XUIDs. Their
+// unlink events must never revoke Nintendo tokens or stall this consumer.
+func unlinkedConsolePID(namespace, subject string) (int64, bool, error) {
+	if (namespace != "wiiu" && namespace != "3ds") || subject == "" {
+		return 0, false, nil
+	}
+	pid, err := strconv.ParseInt(subject, 10, 64)
+	return pid, true, err
+}
 
 // hostRestrict applies optional hostname allowlisting (upstream
 // restrictHostnames behavior; empty list allows all, e.g. development).
