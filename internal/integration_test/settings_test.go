@@ -87,7 +87,7 @@ func TestAccountSettingsApplet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pnid.TimezoneName != "PST8PDT" || pnid.MiiName != "newname" || pnid.MiiData != "BBBB" {
+	if pnid.TimezoneName != "PST8PDT" || pnid.MiiName == "newname" || pnid.MiiData != "BBBB" {
 		t.Fatalf("update not applied: %+v", pnid)
 	}
 

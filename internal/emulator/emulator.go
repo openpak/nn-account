@@ -62,7 +62,7 @@ type Identity struct {
 	MiiData       string `json:"mii_data"` // base64 FFLStoreData
 	DeviceType    string `json:"device_type"`
 	PasswordCache string `json:"password_cache,omitempty"` // base64 of the 32 account.dat cache bytes (NA-1a)
-	Country       string `json:"country,omitempty"`       // NNAS country name, e.g. "US"
+	Country       string `json:"country,omitempty"`        // NNAS country name, e.g. "US"
 	Language      string `json:"language,omitempty"`       // e.g. "en"
 }
 
@@ -141,7 +141,7 @@ func (s *Server) Ensure(ctx context.Context, ns, accountID string) (*Identity, e
 		}
 	}
 	id := &Identity{AccountID: accountID, PID: pnid.PID, Username: pnid.Username, NEXPassword: nex.Password,
-		MiiName: pnid.MiiName, MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache,
+		MiiName: store.ProfileName(acct.GetDisplayName()), MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache,
 		Country: pnid.Country, Language: pnid.Language}
 	if ns == "3ds" {
 		id.FriendCode = nasc.FriendCodeForPID(pnid.PID)
@@ -188,16 +188,17 @@ func (s *Server) mint(ctx context.Context, ns string, acct *accountv1.GetAccount
 	if err != nil {
 		return nil, err
 	}
-	miiName := acct.GetDisplayName()
-	if r := []rune(miiName); len(r) > 10 {
-		miiName = string(r[:10])
-	}
+	miiName := store.ProfileName(acct.GetDisplayName())
 	if miiName == "" {
 		miiName = "OpenPak"
 	}
 	p := &store.PNID{PID: pid, AccountID: acct.GetAccountId(), ServerAccessLevel: "prod", MiiName: miiName,
 		MiiData: defaultMiiData, Country: "US", Language: "en", Region: 1, TimezoneName: "EST5EDT"}
-	for _, username := range []string{nnid(acct.GetDisplayName()), "op" + strconv.FormatInt(pid, 10)} {
+	candidates := []string{nnid(acct.GetDisplayName()), "op" + strconv.FormatInt(pid, 10)}
+	if acct.GetHandle() != "" {
+		candidates = []string{acct.GetHandle()}
+	}
+	for _, username := range candidates {
 		if username == "" {
 			continue
 		}

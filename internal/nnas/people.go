@@ -2,6 +2,7 @@ package nnas
 
 import (
 	"encoding/xml"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"openpak/nn-account/internal/store"
 )
@@ -37,7 +40,7 @@ type nascPerson struct {
 // Account creation is delegated to the core (PRD FR-1); the adapter owns the
 // PNID/NEX identities and their core link.
 func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
-	userID, password, email, miiName, miiData, country, language, timezoneName, region, parseErr := s.parsePersonBody(w, r)
+	userID, password, email, _, miiData, country, language, timezoneName, region, parseErr := s.parsePersonBody(w, r)
 	if parseErr != nil {
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
@@ -65,8 +68,16 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 	// Delegate account creation to the core. The plaintext crosses once,
 	// in memory, to the authenticated internal API (PRD §7); it is never
 	// persisted or logged by the adapter.
-	reg, err := s.core.RegisterAccount(r.Context(), "wiiu", email, password, userID, country, language)
+	reg, err := s.core.RegisterAccount(r.Context(), "wiiu", email, password, userID, "", country, language)
 	if err != nil {
+		if status.Code(err) == codes.AlreadyExists && status.Convert(err).Message() == "handle_taken" {
+			writeXMLErr(w, http.StatusBadRequest, "user_id", "0100", "Account ID already exists")
+			return
+		}
+		if status.Code(err) == codes.InvalidArgument && strings.HasPrefix(status.Convert(err).Message(), "handle_") {
+			writeXMLErr(w, http.StatusBadRequest, "user_id", "0002", "user_id is not allowed; use 6-15 letters and digits, starting with a letter")
+			return
+		}
 		log.Printf("[POST] /v1/api/people: core registration failed: %v", err)
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
@@ -109,7 +120,7 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 	pnid := &store.PNID{
 		PID: pid, Username: userID, AccountID: accountID,
 		AccessLevel: 0, ServerAccessLevel: "prod",
-		MiiName: miiName, MiiData: miiData, MiiHash: randomHex(7),
+		MiiName: store.ProfileName(userID), MiiData: miiData, MiiHash: randomHex(7),
 		Country: defaultStr(country, "US"), Language: defaultStr(language, "en"),
 		Region: defaultInt(region, 1), TimezoneName: defaultStr(timezoneName, "EST5EDT"),
 		PasswordCache: cacheHex,
@@ -163,10 +174,26 @@ func (s *Server) handleGetPersonByUsername(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	_, err := store.GetPNIDByUsername(r.Context(), s.pool, username)
+	check, err := s.core.CheckHandle(r.Context(), username)
 	if err != nil {
-		// Available: empty success (upstream).
+		writeXMLErr(w, http.StatusServiceUnavailable, "", "1600", "Unable to process request")
+		return
+	}
+	if !check.GetValid() {
+		writeXMLErr(w, http.StatusBadRequest, "user_id", "0002", "user_id is not allowed")
+		return
+	}
+	if !check.GetAvailable() {
+		writeXMLErr(w, http.StatusBadRequest, "user_id", "0100", "Account ID already exists")
+		return
+	}
+	_, err = store.GetPNIDByUsername(r.Context(), s.pool, username)
+	if errors.Is(err, pgx.ErrNoRows) {
 		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if err != nil {
+		writeXMLErr(w, http.StatusServiceUnavailable, "", "1600", "Unable to process request")
 		return
 	}
 	writeXMLErr(w, http.StatusBadRequest, "", "0100", "Account ID already exists")

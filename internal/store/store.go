@@ -537,3 +537,11 @@ func GetPNIDByAccountID(ctx context.Context, q Querier, accountID string) (*PNID
 func GetServerByGameServerIDAnyMode(ctx context.Context, q Querier, gameServerID string) (*Server, error) {
 	return scanServer(q.QueryRow(ctx, `SELECT `+serverCols+` FROM servers WHERE game_server_id=$1 LIMIT 1`, gameServerID))
 }
+
+// ReleaseDeletedHandle retires the NNID on permanent deletion. The core still
+// holds the public handle for 90 days; no live account can claim it sooner.
+// The PID and foreign-key references remain historical, never reassigned.
+func ReleaseDeletedHandle(ctx context.Context, q Querier, accountID string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET username='deleted-'||pid::text,deleted=true,updated_at=now() WHERE account_id=$1`, accountID)
+	return err
+}

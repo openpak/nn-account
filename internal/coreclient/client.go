@@ -189,12 +189,12 @@ func (c *Client) PollEvents(ctx context.Context, sinceVersion uint64) (*accountv
 
 // RegisterAccount delegates account creation to the core (console
 // registration; PRD FR-1).
-func (c *Client) RegisterAccount(ctx context.Context, namespace, email, password, displayName, country, language string) (*accountv1.RegisterAccountResponse, error) {
+func (c *Client) RegisterAccount(ctx context.Context, namespace, email, password, handle, displayName, country, language string) (*accountv1.RegisterAccountResponse, error) {
 	rctx, cancel := context.WithTimeout(c.ctx(ctx), 15*time.Second)
 	defer cancel()
 	return c.reg.RegisterAccount(rctx, &accountv1.RegisterAccountRequest{
 		CallerNamespace: namespace, Purpose: "console_registration",
-		Email: email, Password: password, DisplayName: displayName,
+		Email: email, Password: password, DisplayName: displayName, Handle: handle,
 		Country: country, Language: language,
 	})
 }
@@ -257,4 +257,11 @@ func (c *Client) AccountPage(ctx context.Context, after string) ([]string, strin
 		ids = append(ids, a.AccountId)
 	}
 	return ids, r.NextAfterAccountId, nil
+}
+
+// CheckHandle delegates the public name policy and shared availability to core.
+func (c *Client) CheckHandle(ctx context.Context, handle string) (*accountv1.CheckHandleResponse, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	return c.ident.CheckHandle(rctx, &accountv1.CheckHandleRequest{Handle: handle})
 }

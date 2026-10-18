@@ -10,10 +10,13 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod/ \
 	CGO_ENABLED=0 go build -trimpath -o /out/nn-account ./cmd/nn-account
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+	CGO_ENABLED=0 go build -trimpath -o /out/nn-handle-migrate ./cmd/nn-handle-migrate
 
 FROM alpine:3.22
 RUN addgroup -S app && adduser -S -G app app && apk add --no-cache ca-certificates
 USER app
 COPY --from=build /out/nn-account /usr/local/bin/nn-account
+COPY --from=build /out/nn-handle-migrate /usr/local/bin/nn-handle-migrate
 EXPOSE 7001 8001
 ENTRYPOINT ["/usr/local/bin/nn-account"]

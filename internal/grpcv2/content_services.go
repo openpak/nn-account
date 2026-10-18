@@ -39,7 +39,7 @@ func (s *Server) GetNEXData(ctx context.Context, req *pb.GetNEXDataRequest) (*pb
 		if err != nil || pnid.Deleted {
 			return nil, status.Error(codes.InvalidArgument, "No NEX account found")
 		}
-		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+		if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 			return nil, err
 		}
 	}
@@ -67,7 +67,7 @@ func (s *Server) ExchangeTokenForUserData(ctx context.Context, req *pb.ExchangeT
 	if err != nil {
 		return nil, status.Error(codes.Internal, "internal error")
 	}
-	if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+	if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 		return nil, err
 	}
 	return &pb.ExchangeTokenForUserDataResponse{
@@ -112,7 +112,7 @@ func (s *Server) ValidateIndependentServiceToken(ctx context.Context, req *pb.Va
 	level := nexAccount.AccessLevel
 	if pnid, err := store.GetPNIDByPID(ctx, s.pool, nexAccount.OwningPIDOrSelf()); err == nil {
 		// A banned or deleting owner's token is no longer valid.
-		if pnid.Deleted || s.checkCoreStatus(ctx, pnid.AccountID) != nil {
+		if pnid.Deleted || s.checkCoreStatus(ctx, pnid.AccountID, pnid) != nil {
 			return invalid, nil
 		}
 		level = pnid.AccessLevel
@@ -175,7 +175,7 @@ func (s *Server) ExchangeIndependentServiceTokenForUserData(ctx context.Context,
 	}
 	pnid, err := store.GetPNIDByPID(ctx, s.pool, nexAccount.OwningPIDOrSelf())
 	if err == nil {
-		if err := s.checkCoreStatus(ctx, pnid.AccountID); err != nil {
+		if err := s.checkCoreStatus(ctx, pnid.AccountID, pnid); err != nil {
 			return nil, err
 		}
 		resp.Pnid = &pb.GetPNIDResponse{

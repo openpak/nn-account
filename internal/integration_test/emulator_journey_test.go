@@ -54,7 +54,7 @@ func TestEmulatorIdentityLoginJourney(t *testing.T) {
 
 	// An account born on the emulator surface: minted by the core, unknown to
 	// the adapter. Ensure mints PNID, NEX account, link and credential.
-	reg, err := core.RegisterAccount(ctx, "wiiu", "emulator-user@example.com", "webPassword77", "emulatoruser", "US", "en")
+	reg, err := core.RegisterAccount(ctx, "wiiu", "emulator-user@example.com", "webPassword77", "emulatoruser", "", "US", "en")
 	if err != nil {
 		t.Fatalf("core register: %v", err)
 	}

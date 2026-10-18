@@ -135,10 +135,7 @@ func (s *Server) mintShadow(ctx context.Context, accountID string) (*store.PNID,
 	if err != nil {
 		return nil, err
 	}
-	miiName := acct.GetDisplayName()
-	if r := []rune(miiName); len(r) > 10 {
-		miiName = string(r[:10])
-	}
+	miiName := store.ProfileName(acct.GetDisplayName())
 	if miiName == "" {
 		miiName = "OpenPak"
 	}
@@ -147,7 +144,11 @@ func (s *Server) mintShadow(ctx context.Context, accountID string) (*store.PNID,
 	// The NNID shown next to the name: the display name where it fits the NNID
 	// alphabet and is free, otherwise a generated one. Two shadows can race for
 	// the same account; the loser reads the winner's row.
-	for _, username := range []string{nnidFromDisplayName(acct.GetDisplayName()), "op" + itoa(pid)} {
+	candidates := []string{nnidFromDisplayName(acct.GetDisplayName()), "op" + itoa(pid)}
+	if acct.GetHandle() != "" {
+		candidates = []string{acct.GetHandle()}
+	}
+	for _, username := range candidates {
 		if username == "" {
 			continue
 		}
