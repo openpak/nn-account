@@ -34,8 +34,7 @@ privacy, and use supported online services. Operators can self-host the system w
 a dependency on Pretendo's hosted services or a Node.js account runtime.
 
 This is a port and redesign of appropriately licensed Pretendo functionality. Reuse
-existing Go components; rewrite needed non-Go components in Go. OpenPak's Switch
-implementation has no earlier code, service dependency, or affiliation.
+existing Go components; rewrite needed non-Go components in Go.
 
 ## 2. Decisions and proposal boundaries
 
