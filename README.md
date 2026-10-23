@@ -1,7 +1,7 @@
 # OpenPak nn-account — Wii U/3DS adapter (Go)
 
 Go rewrite of Pretendo/account's Nintendo surface, rebuilt as a console
-adapter over the OpenPak [account core](../account). Serves NNAS HTTP and the
+adapter over the OpenPak [account core](../../../../platforms/core/infra/account). Serves NNAS HTTP and the
 Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
 
 **Status: M2 and M3 complete, M4 next** — PRD and M0 inventory: [PRD.md](PRD.md),
@@ -21,7 +21,7 @@ Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
 ## Bans
 
 An account banned in the OpenPak admin is refused everywhere this adapter vouches for it
-([`website/docs/ban-lookup.md`](../website/docs/ban-lookup.md)): NNAS sign-in, token refresh and
+([`website/docs/ban-lookup.md`](../../../../platforms/core/infra/website/docs/ban-lookup.md)): NNAS sign-in, token refresh and
 every bearer call answer NNID error 0108 "Account has been banned"; NASC answers 102; the v2
 gRPC (`GetNEXPassword`, `GetNEXData`, token exchanges, `GetUserData`) refuses with
 InvalidArgument "Account is banned or deleted", which the NEX game servers turn into
