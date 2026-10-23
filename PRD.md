@@ -1,7 +1,7 @@
 # OpenPak Account Core and Nintendo Network Adapter: Go rewrite PRD
 
 Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
-live in `../account` (identity, sessions, recovery, generic links, adapter
+live in `../../../../platforms/core/infra/account` (identity, sessions, recovery, generic links, adapter
 credential domain, invalidation events, internal gRPC, web API; race-tested).
 M3 core integration landed: friends rewires friendship/request/block state
 to the core via coregraph (adapter Resolution service for PID<->account),
@@ -490,5 +490,5 @@ These questions do not prevent M0 or a draft PRD; they gate the indicated downst
   `globals/get_user_data.go`, `globals/account_details_by_pid.go`,
   `globals/account_details_by_username.go`, and `database/`.
 - Workspace planning documents: <https://github.com/openpak/docs/blob/main/research/research-third-party-networks.md> and
-  `../openpak-bootstrap-prompt.md`. This PRD specializes their account scope; draft
+  `../../../../openpak-bootstrap-prompt.md`. This PRD specializes their account scope; draft
   proposals here do not silently supersede confirmed product decisions.
