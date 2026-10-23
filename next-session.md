@@ -68,7 +68,7 @@ strace and emulator logs, probe harnesses: put them in
 `~/REPOS/Openpak/scratch/<topic>`. That folder is a local mount of the media pool,
 outside every repository, so nothing in it is committed. Never use `/tmp` (a
 shared 15 GB RAM disk) or elsewhere on `/home` for this. Keys and signing
-material never go there. Rule: `docs/playbooks/conventions.md` in the workspace.
+material never go there. Rule: <https://docs.openpak.org/contributors/conventions/>.
 
 ## Permanent handles implementation (2026-10-18, local work)
 
