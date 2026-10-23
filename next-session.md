@@ -57,8 +57,8 @@ sign-in links its own family; CI builds on `v*.*.*` tags only.
 ## Pointers
 
 - PRD.md, docs/M0-INVENTORY.md, docs/client-testing.md
-- ../prds/platform-wiiu-prd.md, ../prds/platform-3ds-prd.md
-- ../account (core), ../nn-friends (gRPC consumer), ../nn-juxtaposition
+- ../../../../prds/platform-wiiu-prd.md, ../../../../prds/platform-3ds-prd.md
+- ../../../../platforms/core/infra/account (core), ../nn-friends (gRPC consumer), ../nn-juxtaposition
   (resolvehttp consumer)
 
 ## Scratch (research and throwaway work)
@@ -69,3 +69,32 @@ strace and emulator logs, probe harnesses: put them in
 outside every repository, so nothing in it is committed. Never use `/tmp` (a
 shared 15 GB RAM disk) or elsewhere on `/home` for this. Keys and signing
 material never go there. Rule: `docs/playbooks/conventions.md` in the workspace.
+
+## Permanent handles implementation (2026-10-18, local work)
+
+The account core owns an immutable 6–15 character alphanumeric handle, letter
+first, case-insensitively unique, separate from editable display_name. Numeric
+console codes stay separate; old OP codes are retired completely. Handles are
+held until 90 days after permanent deletion. See docs/handles.md in account core
+for the shared contract; the workspace's scratch/unified-handle/ holds the private
+14-account choices/report and validation logs. No live migration or deployment
+has been performed by this work. Owner review of the complete report is required
+before applying live choices, including console-bound profile refreshes.
+
+Unified-handle review completion (2026-10-18): live profile display fields now
+follow core display_name, truncated to 10 characters; console signup separates the
+permanent handle from optional display name. Mii binary data remains independent.
+The NN migration tool passed isolated PostgreSQL integration for dry-run,
+transaction rollback, idempotent canonical apply and credential/PID preservation.
+Core/NN images package migration commands. See workspace scratch/unified-handle/
+ROLLOUT.md for coordinated operations; combined owner rollout approval remains
+pending. No production deployment or data change has occurred.
+
+Unified-handle deployment — 2026-10-18: user-approved rollout is live, with all 14
+chosen accounts migrated and OP codes retired. Existing link UUIDs/numeric IDs and
+credential material were verified against restricted backups. App 0.20.0 is
+published. See workspace scratch/unified-handle/DEPLOYMENT.md and DEPLOYMENT.json
+for exact deployed source/image identities and live checks. Core-backed profile
+name projections and case-insensitive handle lookup were checked on all 14 accounts.
+Real-console profile recovery/re-enrolment and gameplay tests remain outstanding.
+Earlier "not deployed / awaiting approval" task notes above are historical.
