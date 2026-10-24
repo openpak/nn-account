@@ -173,8 +173,10 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 				if relevant && applyErr == nil {
 					applyErr = store.RevokeTokensForPID(ctx, pool, pid)
 				}
-			case "account_unbanned":
-				// Nothing to re-arm locally; ban revocations are permanent.
+			case "account_unbanned", "account_restored":
+				// Nothing to re-arm locally: revoked tokens stay revoked and
+				// the owner signs in again. A closed account keeps its NNID
+				// through the grace period; only account_deleted releases it.
 			default:
 				log.Printf("events: unknown type %q (advancing)", ev.GetType())
 			}
