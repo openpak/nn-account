@@ -1,41 +1,23 @@
-# OpenPak nn-account — Wii U/3DS adapter (Go)
+# Wii U/3DS Account Server
 
-Go rewrite of Pretendo/account's Nintendo surface, rebuilt as a console
-adapter over the OpenPak [account core](../../../../platforms/core/infra/account). Serves NNAS HTTP and the
-Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.
+OpenPak's Wii U/3DS Account Server.
 
-**Status: M2 and M3 complete, M4 next** — PRD and M0 inventory: [PRD.md](PRD.md),
-[docs/M0-INVENTORY.md](docs/M0-INVENTORY.md).
+| | |
+| --- | --- |
+| Network | Wii U, 3DS |
+| Role | Console account adapter: NNAS HTTP and the `account.v2` gRPC, over the OpenPak account core |
+| Depends on | [`account`](https://github.com/openpak/account) (OpenPak account core), PostgreSQL |
+| Used by | [`nn-friends`](https://github.com/openpak/nn-friends) |
+| Image | `ghcr.io/openpak/nn-account` |
+| Based on | [Pretendo `account`](https://github.com/PretendoNetwork/account) (AGPL-3.0) |
+| Licence | AGPL-3.0-only |
 
-## What runs in Go
+## What it serves
 
-- NNAS: `/v1/api/oauth20/access_token/generate`, `/v1/api/provider/{nex_token,service_token}/@me`,
-  `POST /v1/api/people` (registration), people lookup, `admin/time`,
-  `support/validate/email`
-- gRPC v2: `GetUserData`, `GetNEXPassword`, `ExchangeNEXTokenForUserData`
-  (with the PRD-mandated game-server audience + token-type checks upstream lacked)
-- Console credentials: transformed console secrets are verified by the core's
-  adapter-credential domain; no password material is stored or verified here
-- Durable invalidation events from the core revoke local tokens (bans/unlinks)
-
-## Bans
-
-An account banned in the OpenPak admin is refused everywhere this adapter vouches for it
-([`website/docs/ban-lookup.md`](../../../../platforms/core/infra/website/docs/ban-lookup.md)): NNAS sign-in, token refresh and
-every bearer call answer NNID error 0108 "Account has been banned"; NASC answers 102; the v2
-gRPC (`GetNEXPassword`, `GetNEXData`, token exchanges, `GetUserData`) refuses with
-InvalidArgument "Account is banned or deleted", which the NEX game servers turn into
-`RendezVous::AccountDisabled`; `ValidateIndependentServiceToken` answers invalid. The core is
-asked on every call (no cache), and `account_banned` revokes local tokens.
-
-## Deferred to M4
-
-Console email-confirm trio, `/@me` profile update, and certificate signature crypto with
-operator keys (reasons in `docs/M0-INVENTORY.md`). Everything a pinned Wii U/3DS client needs
-for register, sign-in, NEX token and identity exchange runs in Go. The TypeScript tree under
-`src/` is the upstream reference kept for provenance; the container image builds only
-`cmd/nn-account`. No console or emulator has been run against this yet
-(`docs/client-testing.md`).
+| Endpoint | What |
+| --- | --- |
+| NNAS HTTP | Console sign-in, tokens, registration, people lookup, admin time, email validation |
+| gRPC `account.v2` | `GetUserData`, `GetNEXPassword`, `ExchangeNEXTokenForUserData` for nn-friends |
 
 ## Run
 
@@ -47,19 +29,16 @@ go run ./cmd/nn-account
 
 Requires the account core running and PostgreSQL.
 
-## Tests
+## Docs
 
-```sh
-docker run -d --name openpak-pg-test -e POSTGRES_PASSWORD=test \
-  -e POSTGRES_DB=account_test -p 54329:5432 postgres:18-alpine
-go test -tags integration -race -count=1 ./...
-```
+- [Protocol](docs/protocol.md)
+- [Evidence](docs/evidence.md)
+- [Deploy](docs/deploy.md)
+- [Notes](docs/notes.md)
+- [Client testing](docs/client-testing.md)
+- [Handles](docs/handles.md)
+- [M0 inventory](docs/M0-INVENTORY.md)
 
-The integration suite builds the real core binary and exercises the full
-console journey: register → sign in → NEX token → identity exchange, plus
-fail-closed, audience-mismatch, and ban negative scenarios.
+## Licence
 
-## License
-
-AGPL-3.0. Derived from Pretendo/account (AGPL-3.0); see M0 inventory for
-per-file provenance.
+AGPL-3.0-only. See [LICENSE](LICENSE).
