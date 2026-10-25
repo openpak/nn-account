@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
-	"openpak/nn-account/internal/accountpb"
+	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 
 	"openpak/nn-account/internal/store"
 )

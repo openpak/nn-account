@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"github.com/jackc/pgx/v5"
-	accountv1 "openpak/nn-account/internal/accountpb"
+	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"

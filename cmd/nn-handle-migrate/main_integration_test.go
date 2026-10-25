@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 	"google.golang.org/grpc"
-	accountv1 "openpak/nn-account/internal/accountpb"
 	"openpak/nn-account/internal/store"
 )
 

@@ -3,7 +3,7 @@ package grpcv2
 import (
 	"context"
 	"errors"
-	accountv1 "openpak/nn-account/internal/accountpb"
+	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 	"openpak/nn-account/internal/store"
 	"testing"
 )

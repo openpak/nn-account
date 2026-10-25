@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	accountv1 "openpak/nn-account/internal/accountpb"
+	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 )
 
 // OnlineMarker is the core's MarkOnline, when the core client has it.
