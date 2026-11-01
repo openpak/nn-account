@@ -6,6 +6,10 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## Unreleased — 2026-11-01
+
+- `GET /internal/wiiu-nnid?account_id=<core account id>` (header `X-Internal-Key`, same key as `/internal/resolve/*`) answers `{"nnid": "...", "pid": 123}` for the account's Wii U name, or 404 when it has none (no PNID, deleted, a shadow, or no active core link for the PID, the same fail-closed rule as `ResolvePid`). OpenMaker's History claims use it to match an archived maker's Network ID to a signed-in account. Image `localhost/openpak-nn-account:wiiu-nnid-20261101-3371b95`.
+
 ## v0.12.0 — 2026-11-01
 
 - Mii images link to Nintendo's public Mii Studio renderer. The Mii URL in the account gRPC
