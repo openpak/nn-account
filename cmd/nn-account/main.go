@@ -87,7 +87,9 @@ func run() error {
 	if cfg.InternalKey != "" {
 		// Longest pattern wins: the resolve facade sits beside the emulator
 		// surface under the one internal key.
-		mux.Handle("/internal/resolve/", resolvehttp.New(pool, core, cfg.InternalKey))
+		rh := resolvehttp.New(pool, core, cfg.InternalKey)
+		mux.Handle("/internal/resolve/", rh)
+		mux.Handle("/internal/wiiu-nnid", rh)
 		mux.Handle("/internal/", emulator.New(pool, core, cfg.InternalKey))
 	}
 
