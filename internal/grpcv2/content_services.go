@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"openpak/nn-account/internal/miistudio"
 	"openpak/nn-account/internal/store"
 )
 
@@ -197,7 +198,7 @@ func (s *Server) ExchangeIndependentServiceTokenForUserData(ctx context.Context,
 }
 
 func (s *Server) mii(p *store.PNID) *pb.Mii {
-	return &pb.Mii{Name: p.MiiName, Data: p.MiiData, Url: s.cdn + "/mii/" + itoa(p.PID) + "/standard.tga"}
+	return &pb.Mii{Name: p.MiiName, Data: p.MiiData, Url: miistudio.LinkFor(s.cdn, p.PID, p.MiiData)}
 }
 
 func (s *Server) serverForClientIDs(ctx context.Context, clientIDs []string) *store.Server {

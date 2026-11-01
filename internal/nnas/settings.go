@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"openpak/nn-account/internal/miistudio"
 	"openpak/nn-account/internal/store"
 )
 
@@ -92,26 +93,59 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request, pn
 	http.Redirect(w, r, "/v1/api/account_settings/ui/profile?notice=saved", http.StatusFound)
 }
 
-// handleSettingsMiiImage proxies the Mii image from the CDN: the settings
-// applet enforces a strict domain whitelist, so the adapter re-serves it.
+// handleSettingsMiiImage answers the settings applet's Mii image request with
+// a redirect to Nintendo's public Mii Studio renderer (or the OpenPak fallback
+// avatar). The adapter never fetches or stores the rendered image.
 func (s *Server) handleSettingsMiiImage(w http.ResponseWriter, r *http.Request) {
-	pid := r.PathValue("pid")
-	face := r.PathValue("face")
-	if !validPIDPath(pid) || !validFace(face) {
+	s.serveMii(w, r, r.PathValue("pid"), r.PathValue("face"))
+}
+
+// handleMiiImage serves /mii/{pid}/{file}: the stable image URL for Juxtaposition
+// and other consumers. Same behaviour as the settings route.
+func (s *Server) handleMiiImage(w http.ResponseWriter, r *http.Request) {
+	s.serveMii(w, r, r.PathValue("pid"), r.PathValue("file"))
+}
+
+func (s *Server) serveMii(w http.ResponseWriter, r *http.Request, pidStr, file string) {
+	pid, err := strconv.ParseInt(pidStr, 10, 64)
+	if err != nil || !validPIDPath(pidStr) || !validMiiFile(file) {
 		http.NotFound(w, r)
 		return
 	}
-	resp, err := http.Get(s.cfg.CDNBaseURL + "/mii/" + pid + "/" + face + ".tga") // #nosec G107 -- base URL is operator config
-	if err != nil {
-		w.WriteHeader(http.StatusBadGateway)
+	pnid, err := store.GetPNIDByPID(r.Context(), s.pool, pid)
+	if err != nil || pnid == nil {
+		http.NotFound(w, r)
 		return
 	}
-	defer resp.Body.Close()
-	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	w.Header().Set("Cache-Control", "max-age=300")
-	w.WriteHeader(resp.StatusCode)
-	limited := io.LimitReader(resp.Body, 1<<20) // 1 MiB bound
-	_, _ = w.Write(readAll(limited))
+	m, perr := miistudio.Parse64(pnid.MiiData)
+	if perr != nil || file == "fallback.svg" {
+		var initial string
+		if pnid.MiiName != "" {
+			initial = miistudio.Initial(pnid.MiiName)
+		} else {
+			initial = miistudio.Initial(pnid.Username)
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		_, _ = w.Write(miistudio.FallbackSVG(initial, miistudio.FallbackColor(m, pid)))
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	http.Redirect(w, r, miistudio.URL(m, miistudio.Expression(file)), http.StatusFound)
+}
+
+// validMiiFile allows plain image names such as normal_face.png, smile.png,
+// standard.tga or fallback.svg.
+func validMiiFile(f string) bool {
+	if f == "" || len(f) > 40 {
+		return false
+	}
+	for _, c := range f {
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return !strings.Contains(f, "..")
 }
 
 func validPIDPath(pid string) bool {

@@ -56,6 +56,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/api/account_settings/ui/profile", s.settingsAuth(s.handleSettingsProfile))
 	s.mux.HandleFunc("POST /v1/api/account_settings/update", s.settingsAuth(s.handleSettingsUpdate))
 	s.mux.HandleFunc("GET /v1/api/account_settings/mii/{pid}/{face}", s.handleSettingsMiiImage)
+	s.mux.HandleFunc("GET /mii/{pid}/{file}", s.handleMiiImage)
 	// Connection checks (console-dependency; separate hostnames upstream)
 	s.mux.HandleFunc("GET /conntest", s.handleConnTest)
 	s.mux.HandleFunc("GET /cbvc/{console}/{unknown}/{region}", s.handleCBVC)

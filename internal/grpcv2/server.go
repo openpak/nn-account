@@ -19,6 +19,7 @@ import (
 	pb "github.com/PretendoNetwork/grpc/go/account/v2"
 	accountv1 "github.com/openpak/account-api/openpak/account/v1"
 
+	"openpak/nn-account/internal/miistudio"
 	"openpak/nn-account/internal/store"
 )
 
@@ -104,7 +105,7 @@ func (s *Server) GetUserData(ctx context.Context, req *pb.GetUserDataRequest) (*
 		Mii: &pb.Mii{
 			Name: pnid.MiiName,
 			Data: pnid.MiiData,
-			Url:  s.cdn + "/mii/" + itoa(pnid.PID) + "/standard.tga",
+			Url:  miistudio.LinkFor(s.cdn, pnid.PID, pnid.MiiData),
 		},
 		CreationDate: pnid.CreationDate.UTC().Format("2006-01-02T15:04:05Z"),
 		Country:      pnid.Country,

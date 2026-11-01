@@ -4,6 +4,8 @@ package integration_test
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -164,5 +166,52 @@ func TestSettingsFrozenAfterDeletion(t *testing.T) {
 	srv.ServeHTTP(forgeRec, forgeReq)
 	if forgeRec.Code != http.StatusGatewayTimeout {
 		t.Fatalf("core status must refuse forged token, got %d", forgeRec.Code)
+	}
+}
+
+// Mii images are links to Mii Studio (never fetched), or the OpenPak fallback
+// avatar when the stored data is not a usable Mii.
+func TestMiiImageRedirectsToStudio(t *testing.T) {
+	core := startCore(t)
+	srv, _, pool := startAdapter(t, core)
+
+	form := strings.NewReader(strings.Join([]string{
+		"user_id=miiguy", "password=consoleSecret99", "email.address=mii@example.com",
+		"mii.name=Miiguy", "mii.data=AAAA", "country=US", "language=en", "region=1", "tz_name=EST5EDT",
+	}, "&"))
+	req := httptest.NewRequest("POST", "/v1/api/people", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("registration failed: %d %s", rec.Code, rec.Body.String())
+	}
+	pid := between(rec.Body.String(), "<pid>", "</pid>")
+
+	// Invalid data: fallback avatar, no redirect.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest("GET", "/mii/"+pid+"/normal_face.png", nil))
+	if rec.Code != 200 || rec.Header().Get("Content-Type") != "image/svg+xml" || !strings.Contains(rec.Body.String(), ">M<") {
+		t.Fatalf("fallback: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// Valid Ver3 Mii (mii-js generated vector): 302 to Studio.
+	const mii = "0300681098e8f8c8f3a74b1f83573bead235f8c858a80000674d4d006900690033000000000000000000000000001b2faf6704068468c720f426871af1221586b10029290260c4194d00690069003300000000000000000000000000000054de"
+	raw, _ := hex.DecodeString(mii)
+	if err := store.UpdatePNIDMii(context.Background(), pool, parseInt(t, pid), "Miiguy", base64.StdEncoding.EncodeToString(raw)); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/mii/" + pid + "/smile_open_mouth.png", "/v1/api/account_settings/mii/" + pid + "/smile_open_mouth"} {
+		rec = httptest.NewRecorder()
+		srv.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		loc := rec.Header().Get("Location")
+		if rec.Code != 302 || !strings.HasPrefix(loc, "https://studio.mii.nintendo.com/miis/image.png?") || !strings.Contains(loc, "expression=smile_open_mouth") {
+			t.Fatalf("%s: %d %q", path, rec.Code, loc)
+		}
+	}
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest("GET", "/mii/abc/normal_face.png", nil))
+	if rec.Code != 404 {
+		t.Fatalf("bad pid: %d", rec.Code)
 	}
 }

@@ -65,7 +65,7 @@ func run() error {
 
 	// Pretendo-compatible account gRPC v2.
 	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcv2.Interceptor(cfg.GRPCAPIKey)))
-	pb.RegisterAccountServiceServer(grpcSrv, grpcv2.New(pool, core, cfg.CDNBaseURL))
+	pb.RegisterAccountServiceServer(grpcSrv, grpcv2.New(pool, core, miiFallbackBase(cfg)))
 	resolutionv1.RegisterResolutionServer(grpcSrv, resolution.New(pool, core))
 	healthSrv := health.NewServer()
 	healthSrv.SetServingStatus("nn-account", healthv1.HealthCheckResponse_SERVING)
@@ -258,4 +258,13 @@ func publishNNIDs(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Clie
 		}
 	}
 	log.Printf("publish NNIDs: %d names, %d failed", len(names), failed)
+}
+
+// miiFallbackBase is the public base for the OpenPak fallback avatar served
+// by the NNAS listener; Mii images themselves are Studio links.
+func miiFallbackBase(cfg *config.Config) string {
+	if cfg.NNASDomain != "" {
+		return "https://" + cfg.NNASDomain
+	}
+	return cfg.CDNBaseURL
 }

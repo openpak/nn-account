@@ -6,6 +6,18 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.12.0 — 2026-11-01
+
+- Mii images link to Nintendo's public Mii Studio renderer. The Mii URL in the account gRPC
+  responses is now a `studio.mii.nintendo.com` link built from the stored `mii_data`
+  (Wii U / 3DS Ver3 converted to Studio's 46-byte encoding, `internal/miistudio`, ported from
+  PretendoNetwork/mii-js, AGPL-3.0-only). `GET /mii/{pid}/{file}` and the settings route
+  `/v1/api/account_settings/mii/{pid}/{face}` answer 302 to Studio; the adapter never fetches,
+  stores or caches the rendered image. Studio serves PNG only, so `.tga` requests get the PNG link.
+- Fallback avatar: when `mii_data` is missing or invalid the same routes serve an original
+  OpenPak SVG (favourite colour disc, cyan ring, initial) and `/mii/{pid}/fallback.svg` serves it
+  explicitly. `NN_ACCOUNT_CDN_BASE_URL` is no longer used for Mii images.
+
 ## v0.11.0 — 2026-10-17
 
 - provisioning: every active core account now has an identity and an active link in both the
