@@ -1,19 +1,5 @@
 # OpenPak Account Core and Nintendo Network Adapter: Go rewrite PRD
 
-Status: in progress — M0 inventory complete (`docs/M0-INVENTORY.md`). M1 core
-live in `../../../../platforms/core/infra/account` (identity, sessions, recovery, generic links, adapter
-credential domain, invalidation events, internal gRPC, web API; race-tested).
-M3 core integration landed: friends rewires friendship/request/block state
-to the core via coregraph (adapter Resolution service for PID<->account),
-verified end-to-end against live core+adapter. M2 Go surface complete: gRPC v2 contract, all NNAS core routes
-(devices, miis, mapped_ids, content, deletion → core, settings applet),
-conntest/CBVC, and NASC /ac run in Go with passing end-to-end Wii U + 3DS
-journey suites and a two-binary live smoke. Deferred to M4 with recorded
-reasons: console email-confirm trio, /@me profile update, cert signature
-crypto with operator keys (docs/M0-INVENTORY.md, docs/client-testing.md).
-No console/emulator integration has been run yet; prerequisites are tracked
-in docs/client-testing.md.
-
 Owner: tobagin. Date: 2026-09-06.
 
 Implementation targets: `openpak/account` (new console-agnostic core) and
