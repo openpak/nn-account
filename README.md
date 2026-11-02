@@ -32,13 +32,14 @@ Requires the account core running and PostgreSQL.
 ## Docs
 
 - [Protocol](docs/protocol.md)
-- [Evidence](docs/evidence.md)
 - [Deploy](docs/deploy.md)
-- [Notes](docs/notes.md)
 - [Client testing](docs/client-testing.md)
 - [Handles](docs/handles.md)
 - [M0 inventory](docs/M0-INVENTORY.md)
+- [Provenance](docs/provenance.md)
 
 ## Licence
 
 AGPL-3.0-only. See [LICENSE](LICENSE).
+
+PRDs: openpak/prds (private)

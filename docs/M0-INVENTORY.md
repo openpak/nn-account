@@ -112,6 +112,6 @@ Failure behavior: cross-service link activation is two-phase via states above; a
 
 ## 5. First client targets
 
-- Wii U: console + emulator (Cemu) — config recorded at M2 acceptance.
+- Wii U: console + emulator (Quay) — config recorded at M2 acceptance.
 - 3DS: console + emulator (Citra) — config recorded at M2 acceptance.
 - nn-friends `eb85ca3` pinned for gRPC v2 contract tests.

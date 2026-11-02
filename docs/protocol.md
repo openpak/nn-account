@@ -20,3 +20,11 @@ gRPC (`GetNEXPassword`, `GetNEXData`, token exchanges, `GetUserData`) refuses wi
 InvalidArgument "Account is banned or deleted", which the NEX game servers turn into
 `RendezVous::AccountDisabled`; `ValidateIndependentServiceToken` answers invalid. The core is
 asked on every call (no cache), and `account_banned` revokes local tokens.
+
+## Deferred (M4)
+
+Console email-confirm trio, `/@me` profile update, and certificate signature crypto with
+operator keys (reasons in `M0-INVENTORY.md`). Everything a pinned Wii U/3DS client needs for
+register, sign-in, NEX token and identity exchange runs in Go. The TypeScript tree under
+`src/` is the upstream reference; the image builds only `cmd/nn-account`. It serves NNAS HTTP
+and the Pretendo-compatible `account.v2.AccountService` gRPC consumed by nn-friends.

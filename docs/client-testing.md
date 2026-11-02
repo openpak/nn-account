@@ -18,10 +18,10 @@ Covered by the integration suites against the real Go core + adapter:
 
 | Client | Config | Needs |
 |---|---|---|
-| Cemu (emulator) | Online mode with DNS redirection of `account.nintendo.net` to the adapter; account settings applet exercised via service-token flow | needs Cemu build + online files; DNS override + cert trust to be documented at acceptance |
+| Quay (emulator) | Online mode with DNS redirection of `account.nintendo.net` to the adapter; account settings applet exercised via service-token flow | needs Quay build + online files; DNS override + cert trust to be documented at acceptance |
 | Wii U hardware | Custom DNS + CA install (CFW); NNID environment patched to the adapter hostname | requires console + CFW prerequisites; track separately |
 
-Prerequisites to record: exact Cemu version, online-files
+Prerequisites to record: exact Quay version, online-files
 source, patches applied, adapter DNS names, capture of a failing handshake
 if any (PRD §10 evidence requirements).
 
