@@ -131,27 +131,6 @@ func (s *Server) handleMappedIDs(w http.ResponseWriter, r *http.Request) {
 		`</pid><user_id>` + escapeXML(username) + `</user_id></mapped_id></mapped_ids>`))
 }
 
-// handleAgreements ports GET /content/agreements (OpenPak-authored content).
-func (s *Server) handleAgreements(w http.ResponseWriter, r *http.Request) {
-	setNintendoHeaders(w)
-	_, _ = w.Write([]byte(`<agreements><agreement><version>1</version><country></country>` +
-		`<agreement_text>OpenPak Network Terms of Service apply.</agreement_text>` +
-		`</agreement></agreements>`))
-}
-
-// handleTimeZones ports GET /content/time_zones with a minimal, valid list
-// (consoles select from this; any valid entry works).
-func (s *Server) handleTimeZones(w http.ResponseWriter, r *http.Request) {
-	setNintendoHeaders(w)
-	var b strings.Builder
-	b.WriteString(`<time_zones><time_zone><area>EST5EDT</area><language>en</language>` +
-		`<name>Eastern Time (US &amp; Canada)</name><order>11</order><utc_offset>-14400</utc_offset></time_zone>`)
-	b.WriteString(`<time_zone><area>PST8PDT</area><language>en</language>` +
-		`<name>Pacific Time (US &amp; Canada)</name><order>3</order><utc_offset>-28800</utc_offset></time_zone>`)
-	b.WriteString(`</time_zones>`)
-	_, _ = w.Write([]byte(b.String()))
-}
-
 // handleDeviceStatus ports GET /v1/api/devices/@current/status. Its use is unknown upstream too; an empty
 // device element lets the console's NNID link carry on (a 404 here is error 102-2534).
 func (s *Server) handleDeviceStatus(w http.ResponseWriter, _ *http.Request) {

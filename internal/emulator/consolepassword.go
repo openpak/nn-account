@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/store"
@@ -17,30 +16,19 @@ import (
 // the player types, so these are ours: 6 to 16 printable ASCII characters, no spaces, and
 // not containing the Network ID.
 const (
-	MinConsolePassword = 6
-	MaxConsolePassword = 16
+	MinConsolePassword = nnas.MinConsolePassword
+	MaxConsolePassword = nnas.MaxConsolePassword
 )
 
 var (
-	ErrPasswordLength = errors.New("password_length")
-	ErrPasswordASCII  = errors.New("password_ascii")
-	ErrPasswordIsID   = errors.New("password_is_id")
+	ErrPasswordLength = nnas.ErrPasswordLength
+	ErrPasswordASCII  = nnas.ErrPasswordASCII
+	ErrPasswordIsID   = nnas.ErrPasswordIsID
 )
 
 // ValidateConsolePassword checks a console password against the rules for a Network ID.
 func ValidateConsolePassword(password, nnid string) error {
-	if len(password) < MinConsolePassword || len(password) > MaxConsolePassword {
-		return ErrPasswordLength
-	}
-	for i := 0; i < len(password); i++ {
-		if c := password[i]; c < 0x21 || c > 0x7e {
-			return ErrPasswordASCII
-		}
-	}
-	if nnid != "" && strings.Contains(strings.ToLower(password), strings.ToLower(nnid)) {
-		return ErrPasswordIsID
-	}
-	return nil
+	return nnas.ValidateConsolePassword(password, nnid)
 }
 
 // Modes of pnids.console_pw_mode, and the statuses the endpoint answers.

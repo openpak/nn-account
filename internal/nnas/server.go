@@ -50,8 +50,18 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /v1/api/admin/mapped_ids", s.handleMappedIDs)
 	s.mux.HandleFunc("GET /v1/api/content/agreements/{type}/{region}/{version}", s.handleAgreements)
 	s.mux.HandleFunc("GET /v1/api/content/time_zones/{country}/{language}", s.handleTimeZones)
-	// Support (email confirmation subset)
+	// Support. Pretendo's validate/email is POST; GET stays for any client that used it.
+	s.mux.HandleFunc("POST /v1/api/support/validate/email", s.handleValidateEmail)
 	s.mux.HandleFunc("GET /v1/api/support/validate/email", s.handleValidateEmail)
+	s.mux.HandleFunc("PUT /v1/api/support/email_confirmation/{pid}/{code}", s.handleEmailConfirmation)
+	s.mux.HandleFunc("GET /v1/api/support/resend_confirmation", s.handleResendConfirmation)
+	s.mux.HandleFunc("GET /v1/api/support/send_confirmation/pin/{email}", s.handleSendConfirmationPin)
+	s.mux.HandleFunc("GET /v1/api/support/forgotten_password/{pid}", s.handleForgottenPassword)
+	// Miis and the rest of the person routes
+	s.mux.HandleFunc("GET /v1/api/miis", s.handleMiis)
+	s.mux.HandleFunc("PUT /v1/api/people/@me", s.auth(s.handleUpdatePerson))
+	s.mux.HandleFunc("GET /v1/api/people/@me/emails", s.auth(s.handleEmails))
+	s.mux.HandleFunc("PUT /v1/api/people/@me/emails/@primary", s.auth(s.handleSetEmail))
 	// Wii U account settings applet
 	s.mux.HandleFunc("GET /v1/api/account_settings/ui/profile", s.settingsAuth(s.handleSettingsProfile))
 	s.mux.HandleFunc("POST /v1/api/account_settings/update", s.settingsAuth(s.handleSettingsUpdate))

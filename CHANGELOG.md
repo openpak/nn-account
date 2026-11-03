@@ -6,6 +6,14 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.15.0 — 2026-11-03
+- Every Pretendo NNAS route the Go server lacked, for a real console linking an existing NNID: `GET /v1/api/miis`, `GET` and `PUT /v1/api/people/@me/emails[/@primary]`, `PUT /v1/api/people/@me`, and `/v1/api/support/{forgotten_password/{pid},resend_confirmation,send_confirmation/pin/{email},email_confirmation/{pid}/{code}}`.
+- `validate/email` is registered as POST (Pretendo's method); GET stays.
+- Time zones: Pretendo's full table (173 countries, 9 languages) replaces the two US zones, and the body is `<timezones><timezone>` as upstream. An unknown country is 400/0002.
+- Agreements: Pretendo's document shape, one entry per console language, for the country the console asks about (EUR and the rest no longer get an empty one).
+- Account semantics: emails are read from the core account. An email change from the console is refused (400/1600): the core changes an address only through the website (password + mailed link). Forgotten password, resend and the parental-controls mail are likewise refused or answered truthfully (a verified account is already confirmed), never faked. A password in `PUT /people/@me` is a console password (same rules as the website endpoint): core credential + `password_cache` = `NintendoPasswordHash`, mode `custom`, tokens dropped.
+- Migration 0008: `pnids.gender`, `marketing_flag`, `off_device_flag`; country, language, region and time zone use the existing columns.
+
 ## v0.14.3 — 2026-11-03
 - `GET /v1/api/devices/@current/status` answers an empty `<device>` as Pretendo does; a real Wii U asks it while linking an existing NNID and got 404 (error 102-2534).
 
