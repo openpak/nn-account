@@ -152,6 +152,13 @@ func (s *Server) handleTimeZones(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
+// handleDeviceStatus ports GET /v1/api/devices/@current/status. Its use is unknown upstream too; an empty
+// device element lets the console's NNID link carry on (a 404 here is error 102-2534).
+func (s *Server) handleDeviceStatus(w http.ResponseWriter, _ *http.Request) {
+	setNintendoHeaders(w)
+	_, _ = w.Write([]byte(`<?xml version="1.0"?><device></device>`))
+}
+
 func setNintendoHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.Header().Set("Server", "Nintendo 3DS (http)")

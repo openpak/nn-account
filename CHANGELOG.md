@@ -6,6 +6,9 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.14.3 — 2026-11-03
+- `GET /v1/api/devices/@current/status` answers an empty `<device>` as Pretendo does; a real Wii U asks it while linking an existing NNID and got 404 (error 102-2534).
+
 ## v0.14.2 — 2026-11-03
 - One log line per console request (host, method, path, status; never the query, headers or body), to see which NNAS call a real Wii U makes.
 

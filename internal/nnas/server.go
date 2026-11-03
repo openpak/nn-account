@@ -62,6 +62,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /cbvc/{console}/{unknown}/{region}", s.handleCBVC)
 	// Admin
 	s.mux.HandleFunc("GET /v1/api/admin/time", s.handleTime)
+	// Asked by a real Wii U while linking an existing NNID; Pretendo answers an empty <device/>.
+	s.mux.HandleFunc("GET /v1/api/devices/@current/status", s.handleDeviceStatus)
 	// Health
 	s.mux.HandleFunc("GET /healthz", s.handleHealth)
 }
