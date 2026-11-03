@@ -6,6 +6,10 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.14.1 — 2026-11-03
+
+- Integration test `TestAdapterConsoleJourney`: the availability check used `unregistered_name`, which the core's handle rule (6-15 letters and digits, starting with a letter, since the permanent core-owned handles) rejects with 0002; the code is right, the test was stale. It now checks a valid free name (empty 200) and that the underscore name is 400/0002. The default core checkout path follows the platforms/ layout (`ACCOUNT_CORE_DIR` still overrides).
+
 ## v0.14.0 — 2026-11-03
 
 - Console password. `POST /internal/wiiu/console-password` (`X-Internal-Key`) `{account_id, password, mode}` sets the Wii U/3DS console credential to `NintendoPasswordHash(password, pid)`, in the core's credential domain and in `pnids.password_cache` as one value, so a real console's "Link an existing Network ID" and the emulator sign in with the same secret. It runs `Ensure` first, so an account with no PNID or a shadow one gets a full one. The plain password is never stored or logged.

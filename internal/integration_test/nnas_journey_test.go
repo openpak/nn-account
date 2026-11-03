@@ -65,10 +65,10 @@ func startCore(t *testing.T) *coreclient.Client {
 
 	// Resolve the sibling core repo relative to this file.
 	_, thisFile, _, _ := runtime.Caller(0)
-	coreDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "account")
+	coreDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..", "..", "core", "infra", "account")
 	bin := filepath.Join(t.TempDir(), "account-core")
 	if d := os.Getenv("ACCOUNT_CORE_DIR"); d != "" {
-		coreDir = d // the sibling checkout is not always at ../../../account
+		coreDir = d // the sibling checkout is not always at ../../../../../core/infra/account
 	}
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "openpak/account/cmd/account")
 	build.Dir = coreDir
@@ -398,9 +398,15 @@ func TestAdapterConsoleJourney(t *testing.T) {
 	if dup != http.StatusBadRequest || !strings.Contains(dupBody, "0100") {
 		t.Fatalf("taken username must 400/0100, got %d %s", dup, dupBody)
 	}
-	free, freeBody := getXMLWithCode(t, nnasSrv, "/v1/api/people/unregistered_name", "", "")
+	free, freeBody := getXMLWithCode(t, nnasSrv, "/v1/api/people/freeplayer7", "", "")
 	if free != http.StatusOK || strings.Contains(freeBody, "error") {
 		t.Fatalf("available username must be empty 200, got %d %s", free, freeBody)
+	}
+	// The core's handle rule is 6-15 letters and digits, starting with a letter (no underscore),
+	// so a name outside it is "not allowed" (0002), not "available".
+	badCode, badBody := getXMLWithCode(t, nnasSrv, "/v1/api/people/unregistered_name", "", "")
+	if badCode != http.StatusBadRequest || !strings.Contains(badBody, "0002") {
+		t.Fatalf("invalid username must 400/0002, got %d %s", badCode, badBody)
 	}
 
 	// --- 9. XML registration body (console format; review P1 #4) ---
