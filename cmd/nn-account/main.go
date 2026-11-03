@@ -95,7 +95,7 @@ func run() error {
 
 	httpSrv := &http.Server{
 		Addr:              cfg.HTTPListenAddr,
-		Handler:           hostRestrict(cfg, mux),
+		Handler:           accessLog(hostRestrict(cfg, mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -224,6 +224,28 @@ func unlinkedConsolePID(namespace, subject string) (int64, bool, error) {
 
 // hostRestrict applies optional hostname allowlisting (upstream
 // restrictHostnames behavior; empty list allows all, e.g. development).
+// accessLog writes one line per console request: method, path and status. Never the query, headers or
+// body, which carry passwords, tokens and device certificates.
+// ponytail: every /v1/api and /provider call, logged; filter by status if it gets noisy.
+func accessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" || strings.HasPrefix(r.URL.Path, "/internal/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		log.Printf("http %s %s %s -> %d", r.Host, r.Method, r.URL.Path, sw.status)
+	})
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (s *statusWriter) WriteHeader(code int) { s.status = code; s.ResponseWriter.WriteHeader(code) }
+
 func hostRestrict(cfg *config.Config, next http.Handler) http.Handler {
 	if len(cfg.AllowedHostnames) == 0 {
 		return next

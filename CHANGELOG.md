@@ -6,6 +6,9 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.14.2 — 2026-11-03
+- One log line per console request (host, method, path, status; never the query, headers or body), to see which NNAS call a real Wii U makes.
+
 ## v0.14.1 — 2026-11-03
 
 - Integration test `TestAdapterConsoleJourney`: the availability check used `unregistered_name`, which the core's handle rule (6-15 letters and digits, starting with a letter, since the permanent core-owned handles) rejects with 0002; the code is right, the test was stale. It now checks a valid free name (empty 200) and that the underscore name is 400/0002. The default core checkout path follows the platforms/ layout (`ACCOUNT_CORE_DIR` still overrides).
