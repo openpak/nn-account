@@ -40,6 +40,8 @@ func New(pool *pgxpool.Pool, core *coreclient.Client, key string) *Server {
 	s := &Server{pool: pool, core: core, key: key, mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /internal/wiiu/emulator", s.identity("wiiu"))
 	s.mux.HandleFunc("GET /internal/3ds/emulator", s.identity("3ds"))
+	s.mux.HandleFunc("POST /internal/wiiu/console-password", s.setConsolePassword)
+	s.mux.HandleFunc("GET /internal/wiiu/console-password", s.consolePasswordStatus)
 	return s
 }
 

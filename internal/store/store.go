@@ -165,6 +165,19 @@ func SetPNIDPasswordCache(ctx context.Context, q Querier, pid int64, hexCache st
 	return err
 }
 
+// ConsolePasswordMode reads pnids.console_pw_mode ('' when never set).
+func ConsolePasswordMode(ctx context.Context, q Querier, pid int64) (string, error) {
+	var m string
+	err := q.QueryRow(ctx, `SELECT console_pw_mode FROM pnids WHERE pid=$1`, pid).Scan(&m)
+	return m, err
+}
+
+// SetConsolePasswordCredential stores the console credential and where it came from.
+func SetConsolePasswordCredential(ctx context.Context, q Querier, pid int64, hexCache, mode string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET password_cache=$2, console_pw_mode=$3, updated_at=now() WHERE pid=$1`, pid, hexCache, mode)
+	return err
+}
+
 func UpdatePNIDProfile(ctx context.Context, q Querier, pid int64, miiName, miiData, country, language, timezone string) error {
 	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, mii_data=$3, country=$4, language=$5, timezone_name=$6,
 		updated_at=now() WHERE pid=$1`, pid, miiName, miiData, country, language, timezone)

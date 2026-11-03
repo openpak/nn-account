@@ -6,6 +6,14 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.14.0 — 2026-11-03
+
+- Console password. `POST /internal/wiiu/console-password` (`X-Internal-Key`) `{account_id, password, mode}` sets the Wii U/3DS console credential to `NintendoPasswordHash(password, pid)`, in the core's credential domain and in `pnids.password_cache` as one value, so a real console's "Link an existing Network ID" and the emulator sign in with the same secret. It runs `Ensure` first, so an account with no PNID or a shadow one gets a full one. The plain password is never stored or logged.
+  - `mode: "sync"` is the website handing over the OpenPak password at sign-in or password change, so the OpenPak password is the console password. A password a Wii U cannot take (outside 6-16 printable ASCII, or containing the Network ID) leaves a separate console password in place, otherwise the credential becomes random so a stale password stops working.
+  - `mode: "custom"` (default) is a separate console password for that case; rule violations answer 422.
+  - `GET /internal/wiiu/console-password?account_id=` answers `{nnid, pid, mode, min, max}` (`mode` is `sync`, `custom`, `incompatible` or empty). Migration 0007 adds `pnids.console_pw_mode`.
+- Integration tests: `ACCOUNT_CORE_DIR` points at the core checkout.
+
 ## v0.13.0 — 2026-11-02
 
 - `GET /internal/wiiu-nnid?account_id=<core account id>` (header `X-Internal-Key`, same key as `/internal/resolve/*`) answers `{"nnid": "...", "pid": 123}` for the account's Wii U name, or 404 when it has none (no PNID, deleted, a shadow, or no active core link for the PID, the same fail-closed rule as `ResolvePid`). OpenMaker's History claims use it to match an archived maker's Network ID to a signed-in account.

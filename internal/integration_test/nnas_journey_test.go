@@ -67,6 +67,9 @@ func startCore(t *testing.T) *coreclient.Client {
 	_, thisFile, _, _ := runtime.Caller(0)
 	coreDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "account")
 	bin := filepath.Join(t.TempDir(), "account-core")
+	if d := os.Getenv("ACCOUNT_CORE_DIR"); d != "" {
+		coreDir = d // the sibling checkout is not always at ../../../account
+	}
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "openpak/account/cmd/account")
 	build.Dir = coreDir
 	out, err := build.CombinedOutput()

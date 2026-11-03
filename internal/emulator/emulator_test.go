@@ -13,3 +13,24 @@ func TestNNID(t *testing.T) {
 		t.Error("password length")
 	}
 }
+
+func TestValidateConsolePassword(t *testing.T) {
+	cases := []struct {
+		pw, id string
+		want   error
+	}{
+		{"goodpass123", "player1", nil},
+		{"Sixteen!Chars123", "player1", nil},
+		{"short", "player1", ErrPasswordLength},
+		{"Seventeen!Chars123", "player1", ErrPasswordLength},
+		{"has space1234", "player1", ErrPasswordASCII},
+		{"pässword1234", "player1", ErrPasswordASCII},
+		{"PlayerOne12", "playerone12", ErrPasswordIsID},
+		{"xxPLAYER1xx", "player1", ErrPasswordIsID},
+	}
+	for _, c := range cases {
+		if got := ValidateConsolePassword(c.pw, c.id); got != c.want {
+			t.Errorf("ValidateConsolePassword(%q,%q) = %v, want %v", c.pw, c.id, got, c.want)
+		}
+	}
+}
