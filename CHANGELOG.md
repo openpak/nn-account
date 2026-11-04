@@ -6,6 +6,11 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.16.4 — 2026-11-04
+
+- PUT `@me/miis/@primary` reads the console's XML body (`<mii><name/><primary/><data/></mii>`); it read form fields
+  only and answered 400, so the Mii made while linking was never saved.
+
 ## v0.16.3 — 2026-11-04
 
 - A trailing slash is ignored, as in upstream Express: the console posts `/people/@me/devices/` while linking an

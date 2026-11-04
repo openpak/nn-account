@@ -1,8 +1,11 @@
 package nnas
 
 import (
+	"encoding/xml"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"openpak/nn-account/internal/store"
@@ -63,8 +66,7 @@ func (s *Server) handleInactivateDevice(w http.ResponseWriter, _ *http.Request, 
 // handleSetPrimaryMii ports PUT /@me/miis/@primary: persists Mii data on the
 // adapter's PNID record (Nintendo-specific profile asset, PRD §5).
 func (s *Server) handleSetPrimaryMii(w http.ResponseWriter, r *http.Request, pnid *store.PNID) {
-	miiName := r.FormValue("mii.name")
-	miiData := r.FormValue("mii.data")
+	miiName, miiData := parseMiiBody(r)
 	if miiName == "" || miiData == "" {
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
@@ -75,6 +77,22 @@ func (s *Server) handleSetPrimaryMii(w http.ResponseWriter, r *http.Request, pni
 	}
 	setNintendoHeaders(w)
 	w.WriteHeader(http.StatusOK)
+}
+
+// parseMiiBody reads the console's XML body <mii><name/><primary/><data/></mii>
+// (upstream request.body.mii); flat mii.name/mii.data form fields are kept for tooling.
+func parseMiiBody(r *http.Request) (name, data string) {
+	if strings.Contains(r.Header.Get("Content-Type"), "xml") || r.Header.Get("Content-Type") == "" {
+		var m struct {
+			Name string `xml:"name"`
+			Data string `xml:"data"`
+		}
+		body, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+		if xml.Unmarshal(body, &m) == nil && m.Name != "" {
+			return m.Name, strings.Join(strings.Fields(m.Data), "")
+		}
+	}
+	return r.FormValue("mii.name"), r.FormValue("mii.data")
 }
 
 // handleDeletion ports POST /@me/deletion: delegates to the core's

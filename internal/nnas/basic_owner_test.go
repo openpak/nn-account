@@ -2,6 +2,8 @@ package nnas
 
 import (
 	"encoding/xml"
+	"net/http/httptest"
+	"strings"
 	"time"
 
 	"encoding/base64"
@@ -44,4 +46,14 @@ func TestPersonXMLUpstreamShape(t *testing.T) {
 		t.Fatalf("%+v", v)
 	}
 	t.Log(v.Offset)
+}
+
+// The console uploads its Mii as XML (PUT @me/miis/@primary was 400 when only form fields were read).
+func TestParseMiiBodyXML(t *testing.T) {
+	r := httptest.NewRequest("PUT", "/v1/api/people/@me/miis/@primary",
+		strings.NewReader("<?xml version=\"1.0\"?><mii><name>Tobagin</name><primary>Y</primary><data>AwAA\nAAB=</data></mii>"))
+	r.Header.Set("Content-Type", "application/xml")
+	if n, d := parseMiiBody(r); n != "Tobagin" || d != "AwAAAAB=" {
+		t.Fatalf("%q %q", n, d)
+	}
 }
