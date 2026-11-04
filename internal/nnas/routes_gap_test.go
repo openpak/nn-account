@@ -68,6 +68,7 @@ func TestPersonRoutesNeedAToken(t *testing.T) {
 	s := testServer()
 	for _, rt := range [][2]string{
 		{"PUT", "/v1/api/people/@me"}, {"GET", "/v1/api/people/@me/emails"}, {"PUT", "/v1/api/people/@me/emails/@primary"},
+		{"POST", "/v1/api/people/@me/devices/"}, // trailing slash, as the console sends it (404 was 102-2534)
 	} {
 		w := serve(s, rt[0], rt[1], "<person/>")
 		if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "1105") {

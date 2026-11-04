@@ -3,7 +3,6 @@ package nnas
 import (
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"openpak/nn-account/internal/store"
@@ -37,11 +36,9 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request, pnid *sto
 		`</system_version><type>RETAIL</type><updated_by>USER</updated_by></device></devices>`))
 }
 
-// handlePostDevices ports POST /@me/devices: returns the profile projection.
+// handlePostDevices ports POST /@me/devices: the same person as @me/profile.
 func (s *Server) handlePostDevices(w http.ResponseWriter, r *http.Request, pnid *store.PNID) {
-	setNintendoHeaders(w)
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(profileXML(pnid)))
+	s.handleProfile(w, r, pnid)
 }
 
 // handleDevicesOwner ports GET /@me/devices/owner (same as profile).
@@ -142,20 +139,6 @@ func setNintendoHeaders(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
 	w.Header().Set("Server", "Nintendo 3DS (http)")
 	w.Header().Set("X-Nintendo-Date", strconv.FormatInt(time.Now().UnixMilli(), 10))
-}
-
-func profileXML(p *store.PNID) string {
-	var b strings.Builder
-	b.WriteString(`<person>`)
-	b.WriteString(`<pid>` + strconv.FormatInt(p.PID, 10) + `</pid>`)
-	b.WriteString(`<username>` + escapeXML(p.Username) + `</username>`)
-	b.WriteString(`<country>` + escapeXML(p.Country) + `</country>`)
-	b.WriteString(`<language>` + escapeXML(p.Language) + `</language>`)
-	b.WriteString(`<region>` + strconv.FormatInt(int64(p.Region), 10) + `</region>`)
-	b.WriteString(`<timezone><name>` + escapeXML(p.TimezoneName) + `</name></timezone>`)
-	b.WriteString(`<mii><name>` + escapeXML(p.MiiName) + `</name><primary>Y</primary><data>` + escapeXML(p.MiiData) + `</data></mii>`)
-	b.WriteString(`</person>`)
-	return b.String()
 }
 
 func parseInt64(s string) int64 {

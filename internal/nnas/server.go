@@ -111,7 +111,7 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, *store.PNID)
 				writeXMLErr(w, http.StatusUnauthorized, "access_token", "0005", "Invalid access token")
 				return
 			}
-		case parts[0] == "Basic" && strings.HasSuffix(r.URL.Path, "/devices/owner"):
+		case parts[0] == "Basic" && strings.Contains(r.URL.Path, "/@me/devices"):
 			// "Link an existing NNID": the console sends base64("username password")
 			// with the plain password (upstream getPNIDByBasicAuth).
 			if pnid = s.basicOwner(r, token); pnid == nil {
@@ -292,5 +292,10 @@ func (s *Server) handleValidateEmail(w http.ResponseWriter, r *http.Request) {
 
 // ServeHTTP implements http.Handler.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Express (upstream) ignores a trailing slash; the console sends one on
+	// POST /people/@me/devices/ when linking an existing NNID (404 was 102-2534).
+	if p := r.URL.Path; len(p) > 1 && strings.HasSuffix(p, "/") {
+		r.URL.Path = strings.TrimRight(p, "/")
+	}
 	s.mux.ServeHTTP(w, r)
 }

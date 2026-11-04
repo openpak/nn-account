@@ -6,6 +6,12 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.16.3 — 2026-11-04
+
+- A trailing slash is ignored, as in upstream Express: the console posts `/people/@me/devices/` while linking an
+  existing NNID (404 was 102-2534). Basic credentials are accepted on every `@me/devices` route, and POST
+  `@me/devices` returns the full person.
+
 ## v0.16.2 — 2026-11-04
 
 - `@me/profile` and `@me/devices/owner` return the full upstream person (user_id, email, birth_date, tz_name,
