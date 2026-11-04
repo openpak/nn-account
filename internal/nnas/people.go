@@ -199,22 +199,66 @@ func (s *Server) handleGetPersonByUsername(w http.ResponseWriter, r *http.Reques
 	writeXMLErr(w, http.StatusBadRequest, "", "0100", "Account ID already exists")
 }
 
-// handleProfile ports GET /v1/api/people/@me/profile with field minimization
-// (FR-8): only console-required profile fields are returned.
+// handleProfile ports GET /v1/api/people/@me/profile (also devices/owner) in the
+// upstream getPNIDProfileJSONByPID shape. The console parses every field: a
+// cut-down person made "Link an existing ID" fail with 102-2421.
 func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request, pnid *store.PNID) {
-	w.Header().Set("Content-Type", "text/xml; charset=utf-8")
+	var email, birth string
+	verified := false
+	if acct, err := s.core.GetAccount(r.Context(), pnid.AccountID); err == nil {
+		email, birth, verified = acct.GetEmail(), acct.GetBirthday(), acct.GetEmailVerified()
+	}
+	base := s.cfg.CDNBaseURL
+	if s.cfg.NNASDomain != "" {
+		base = "https://" + s.cfg.NNASDomain
+	}
+	setNintendoHeaders(w)
+	_, _ = w.Write([]byte(`<?xml version="1.0"?>` + personXML(pnid, base, email, birth, verified)))
+}
+
+func personXML(p *store.PNID, base, email, birth string, verified bool) string {
+	yn := func(b bool) string {
+		if b {
+			return "Y"
+		}
+		return "N"
+	}
+	if birth == "" {
+		birth = "1990-01-01"
+	}
+	pid := strconv.FormatInt(p.PID, 10)
+	created := p.CreationDate.UTC().Format("2006-01-02T15:04:05")
+	img := escapeXML(base + "/mii/" + pid + "/normal_face.png")
+	validated := ""
+	if verified {
+		validated = created
+	}
 	var b strings.Builder
-	b.WriteString(`<person>`)
-	b.WriteString(`<pid>` + strconv.FormatInt(pnid.PID, 10) + `</pid>`)
-	b.WriteString(`<username>` + escapeXML(pnid.Username) + `</username>`)
-	b.WriteString(`<country>` + escapeXML(pnid.Country) + `</country>`)
-	b.WriteString(`<language>` + escapeXML(pnid.Language) + `</language>`)
-	b.WriteString(`<region>` + strconv.FormatInt(int64(pnid.Region), 10) + `</region>`)
-	b.WriteString(`<timezone><name>` + escapeXML(pnid.TimezoneName) + `</name></timezone>`)
-	b.WriteString(`<mii><name>` + escapeXML(pnid.MiiName) + `</name><primary>Y</primary><data>` + escapeXML(pnid.MiiData) + `</data></mii>`)
-	b.WriteString(`<flag><active>Y</active><mark_for_spam>N</mark_for_spam></flag>`)
-	b.WriteString(`</person>`)
-	_, _ = w.Write([]byte(b.String()))
+	b.WriteString(`<person><active_flag>Y</active_flag><birth_date>` + escapeXML(birth) + `</birth_date>`)
+	b.WriteString(`<country>` + escapeXML(p.Country) + `</country><create_date>` + created + `</create_date>`)
+	b.WriteString(`<device_attributes/><gender>M</gender><language>` + escapeXML(p.Language) + `</language>`)
+	b.WriteString(`<updated>` + created + `</updated><marketing_flag>N</marketing_flag><off_device_flag>N</off_device_flag>`)
+	b.WriteString(`<pid>` + pid + `</pid>`)
+	b.WriteString(`<email><address>` + escapeXML(email) + `</address><id>` + pid + `</id><parent>N</parent><primary>Y</primary>` +
+		`<reachable>Y</reachable><type>DEFAULT</type><updated_by>USER</updated_by><validated>` + yn(verified) +
+		`</validated><validated_date>` + validated + `</validated_date></email>`)
+	b.WriteString(`<mii><status>COMPLETED</status><data>` + escapeXML(strings.NewReplacer("\r", "", "\n", "").Replace(p.MiiData)) +
+		`</data><id>` + pid + `</id><mii_hash>` + escapeXML(p.MiiHash) + `</mii_hash><mii_images><mii_image><cached_url>` + img +
+		`</cached_url><id>` + pid + `</id><url>` + img + `</url><type>standard</type></mii_image></mii_images><name>` +
+		escapeXML(p.MiiName) + `</name><primary>Y</primary></mii>`)
+	b.WriteString(`<region>` + strconv.FormatInt(int64(p.Region), 10) + `</region><tz_name>` + escapeXML(p.TimezoneName) +
+		`</tz_name><user_id>` + escapeXML(p.Username) + `</user_id><utc_offset>` + utcOffset(p) + `</utc_offset></person>`)
+	return b.String()
+}
+
+// utcOffset finds the PNID's zone in the console time-zone table (seconds), 0 if absent.
+func utcOffset(p *store.PNID) string {
+	for _, z := range zonesFor(p.Country, p.Language) {
+		if z.Name == p.TimezoneName {
+			return z.UTCOffset
+		}
+	}
+	return "0"
 }
 
 // parsePersonBody extracts the registration document. Consoles POST XML

@@ -6,6 +6,12 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.16.2 — 2026-11-04
+
+- `@me/profile` and `@me/devices/owner` return the full upstream person (user_id, email, birth_date, tz_name,
+  utc_offset, the Mii with its image, flags). The cut-down person was 102-2421 (BAD_FORMAT_RESPONSE) on
+  "Link an existing ID".
+
 ## v0.16.1 — 2026-11-04
 
 - "Link an existing NNID" on a real Wii U: `GET /v1/api/people/@me/devices/owner` now accepts the console's Basic
