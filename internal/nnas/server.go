@@ -102,16 +102,24 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, *store.PNID)
 		if isCemu(r) && parts[0] == "Bearer" {
 			token = hexToBase64(token)
 		}
-		if parts[0] != "Bearer" {
-			// Basic auth on provider routes is not supported here; console
-			// device routes that need Basic auth arrive with the devices
-			// handlers (M2 continued).
+		var pnid *store.PNID
+		var err error
+		switch {
+		case parts[0] == "Bearer":
+			pnid, err = store.GetPNIDByAccessToken(r.Context(), s.pool, token)
+			if err != nil {
+				writeXMLErr(w, http.StatusUnauthorized, "access_token", "0005", "Invalid access token")
+				return
+			}
+		case parts[0] == "Basic" && strings.HasSuffix(r.URL.Path, "/devices/owner"):
+			// "Link an existing NNID": the console sends base64("username password")
+			// with the plain password (upstream getPNIDByBasicAuth).
+			if pnid = s.basicOwner(r, token); pnid == nil {
+				writeXMLErr(w, http.StatusUnauthorized, "", "1105", "Email address, username, or password, is not valid")
+				return
+			}
+		default:
 			writeXMLErr(w, http.StatusUnauthorized, "", "1105", "Email address, username, or password, is not valid")
-			return
-		}
-		pnid, err := store.GetPNIDByAccessToken(r.Context(), s.pool, token)
-		if err != nil {
-			writeXMLErr(w, http.StatusUnauthorized, "access_token", "0005", "Invalid access token")
 			return
 		}
 		if pnid.Deleted {
@@ -138,6 +146,42 @@ func (s *Server) auth(next func(http.ResponseWriter, *http.Request, *store.PNID)
 		pnid.MiiName = store.ProfileName(acct.GetDisplayName())
 		next(w, r.WithContext(context.WithValue(r.Context(), ctxPNID, pnid)), pnid)
 	}
+}
+
+// basicOwner checks devices/owner Basic credentials against the core, using the
+// same console transformation as the password grant. nil means rejected.
+func (s *Server) basicOwner(r *http.Request, token string) *store.PNID {
+	user, pass, ok := parseBasic(token)
+	if !ok {
+		return nil
+	}
+	pnid, err := store.GetPNIDByUsername(r.Context(), s.pool, user)
+	if err != nil {
+		return nil
+	}
+	if vc, err := s.core.VerifyAdapterCredential(r.Context(), "wiiu", pnid.AccountID, NintendoPasswordHash(pass, pnid.PID)); err == nil && vc.GetValid() {
+		return pnid
+	}
+	// The player types their OpenPak password here, so the core's own
+	// password check is the fallback when the console credential was never set.
+	if vp, err := s.core.VerifyConsolePassword(r.Context(), pnid.AccountID, pass, "wiiu_link_existing"); err == nil && vp.GetAccountId() == pnid.AccountID {
+		return pnid
+	}
+	return nil
+}
+
+// parseBasic splits base64("user password"); the console separates with a
+// space, and the RFC 7617 colon is accepted too.
+func parseBasic(token string) (user, pass string, ok bool) {
+	raw, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return "", "", false
+	}
+	user, pass, ok = strings.Cut(string(raw), " ")
+	if !ok {
+		user, pass, ok = strings.Cut(string(raw), ":")
+	}
+	return user, pass, ok && user != "" && pass != ""
 }
 
 func isCemu(r *http.Request) bool {

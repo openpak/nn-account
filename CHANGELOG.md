@@ -6,6 +6,12 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.16.1 — 2026-11-04
+
+- "Link an existing NNID" on a real Wii U: `GET /v1/api/people/@me/devices/owner` now accepts the console's Basic
+  credentials (`base64("username password")`), checked against the core with the console transformation and then
+  the OpenPak password. It answered 401 before, which the console shows as 102-2613.
+
 ## v0.16.0 — 2026-11-04
 
 - Account erasure (card openpak/prds#120). `DELETE /internal/accounts/{account_id}/data` on the HTTP port (8001
