@@ -3,11 +3,13 @@ package nnas
 import (
 	"encoding/xml"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/store"
 )
 
@@ -71,7 +73,12 @@ func (s *Server) handleSetPrimaryMii(w http.ResponseWriter, r *http.Request, pni
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
 	}
-	if err := store.UpdatePNIDMii(r.Context(), s.pool, pnid.PID, miiName, miiData); err != nil {
+	// The Mii belongs to the account: it goes to the core, where the Wii and the
+	// Switch read it too. Only if the core cannot take it does it stay in pnids.
+	if !miicore.Save(r.Context(), s.core, s.pool, pnid.PID, pnid.AccountID, miiData) {
+		log.Printf("[PUT] /v1/api/people/@me/miis/@primary: pid %d: Mii kept locally, core did not take it", pnid.PID)
+	}
+	if err := store.UpdatePNIDMiiName(r.Context(), s.pool, pnid.PID, miiName); err != nil {
 		writeXMLErr(w, http.StatusInternalServerError, "", "1600", "Unable to process request")
 		return
 	}

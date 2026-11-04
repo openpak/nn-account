@@ -25,6 +25,7 @@ type Client struct {
 	events accountv1.EventsClient
 	reg    accountv1.RegistrationClient
 	sess   accountv1.SessionsClient
+	mii    accountv1.MiiClient
 }
 
 func Dial(ctx context.Context, addr, internalKey string) (*Client, error) {
@@ -38,6 +39,7 @@ func Dial(ctx context.Context, addr, internalKey string) (*Client, error) {
 		events: accountv1.NewEventsClient(conn),
 		reg:    accountv1.NewRegistrationClient(conn),
 		sess:   accountv1.NewSessionsClient(conn),
+		mii:    accountv1.NewMiiClient(conn),
 	}
 	return c, nil
 }
@@ -282,4 +284,35 @@ func (c *Client) ListLinkSubjects(ctx context.Context, accountID string) ([]stri
 		}
 	}
 	return out, nil
+}
+
+// PutMii stores ver3 (96-byte Wii U / 3DS store data) as the account's primary
+// Mii. The Mii belongs to the account, not to this adapter: the Wii and the
+// Switch read the same one from the core.
+func (c *Client) PutMii(ctx context.Context, accountID string, ver3 []byte) (changed bool, err error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	r, err := c.mii.PutMii(rctx, &accountv1.PutMiiRequest{AccountId: accountID, Format: accountv1.MiiFormat_MII_FORMAT_VER3, Data: ver3})
+	if err != nil {
+		return false, err
+	}
+	return r.GetChanged(), nil
+}
+
+// ErrNoMii means the core holds no Mii for the account yet.
+var ErrNoMii = errors.New("coreclient: account has no Mii")
+
+// GetMii returns the account's primary Mii as 96-byte Ver3 store data, or
+// ErrNoMii.
+func (c *Client) GetMii(ctx context.Context, accountID string) ([]byte, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	r, err := c.mii.GetMii(rctx, &accountv1.GetMiiRequest{AccountId: accountID, Format: accountv1.MiiFormat_MII_FORMAT_VER3})
+	if status.Code(err) == codes.NotFound {
+		return nil, ErrNoMii
+	}
+	if err != nil {
+		return nil, err
+	}
+	return r.GetData(), nil
 }

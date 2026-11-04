@@ -100,13 +100,21 @@ const pnidCols = `pnids.pid, pnids.username, pnids.account_id, pnids.access_leve
 	pnids.mii_name, pnids.mii_data, pnids.mii_hash, pnids.country, pnids.language, pnids.region,
 	pnids.timezone_name, pnids.deleted, pnids.creation_date, pnids.shadow, pnids.password_cache`
 
-func scanPNID(row pgx.Row) (*PNID, error) {
+// MiiOverlay, when set, replaces a loaded PNID's Mii data with the account's
+// primary Mii from the core (the Mii belongs to the account, not to this
+// adapter). Set once at startup.
+var MiiOverlay func(ctx context.Context, p *PNID)
+
+func scanPNID(ctx context.Context, row pgx.Row) (*PNID, error) {
 	var p PNID
 	err := row.Scan(&p.PID, &p.Username, &p.AccountID, &p.AccessLevel, &p.ServerAccessLevel,
 		&p.MiiName, &p.MiiData, &p.MiiHash, &p.Country, &p.Language, &p.Region, &p.TimezoneName,
 		&p.Deleted, &p.CreationDate, &p.Shadow, &p.PasswordCache)
 	if err != nil {
 		return nil, err
+	}
+	if MiiOverlay != nil && !p.Deleted {
+		MiiOverlay(ctx, &p)
 	}
 	return &p, nil
 }
@@ -128,22 +136,22 @@ func ListPNIDNames(ctx context.Context, pool *pgxpool.Pool) ([]PNIDName, error) 
 }
 
 func GetPNIDByPID(ctx context.Context, q Querier, pid int64) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.pid=$1`, pid))
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.pid=$1`, pid))
 }
 
 func GetPNIDByUsername(ctx context.Context, q Querier, username string) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE LOWER(pnids.username)=LOWER($1)`, username))
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE LOWER(pnids.username)=LOWER($1)`, username))
 }
 
 func GetPNIDByAccessToken(ctx context.Context, q Querier, rawToken string) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids JOIN oauth_tokens t ON t.pid = pnids.pid
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids JOIN oauth_tokens t ON t.pid = pnids.pid
 		WHERE t.token_hash = $1 AND t.token_type = 'oauth_access' AND t.expires_at > now()`,
 		HashToken(rawToken)))
 }
 
 func GetPNIDByBasicAuth(ctx context.Context, q Querier, base64Token string) (*PNID, error) {
 	// Basic auth: base64("username:password") — password verified by the core.
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.pid = (
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.pid = (
 		SELECT pid FROM basic_auth_cache WHERE token_hash = $1 AND expires_at > now())`, HashToken(base64Token)))
 }
 
@@ -165,7 +173,7 @@ func SetPNIDPasswordCache(ctx context.Context, q Querier, pid int64, hexCache st
 	return err
 }
 
-// ConsolePasswordMode reads pnids.console_pw_mode ('' when never set).
+// ConsolePasswordMode reads pnids.console_pw_mode (” when never set).
 func ConsolePasswordMode(ctx context.Context, q Querier, pid int64) (string, error) {
 	var m string
 	err := q.QueryRow(ctx, `SELECT console_pw_mode FROM pnids WHERE pid=$1`, pid).Scan(&m)
@@ -402,7 +410,7 @@ func IsUniqueViolation(err error) bool {
 var ErrNotFound = errors.New("store: not found")
 
 func GetPNIDByRefreshToken(ctx context.Context, q Querier, rawToken string) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids JOIN oauth_tokens t ON t.pid = pnids.pid
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids JOIN oauth_tokens t ON t.pid = pnids.pid
 		WHERE t.token_hash = $1 AND t.token_type = 'oauth_refresh' AND t.expires_at > now()`,
 		HashToken(rawToken)))
 }
@@ -512,6 +520,13 @@ func UpdatePNIDMii(ctx context.Context, q Querier, pid int64, miiName, miiData s
 	return err
 }
 
+// UpdatePNIDMiiName persists the Mii's name. The Mii data itself is the
+// account's and lives in the core.
+func UpdatePNIDMiiName(ctx context.Context, q Querier, pid int64, miiName string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, updated_at=now() WHERE pid=$1`, pid, miiName)
+	return err
+}
+
 func GetIndependentServiceToken(ctx context.Context, q Querier, rawToken string) (clientID string, pid, titleID int64, issued, expires time.Time, err error) {
 	err = q.QueryRow(ctx, `SELECT client_id, pid, title_id, issued_at, expires_at FROM independent_service_tokens
 		WHERE token_hash=$1`, HashToken(rawToken)).Scan(&clientID, &pid, &titleID, &issued, &expires)
@@ -542,7 +557,7 @@ func strconv_itoa(n int) string {
 }
 
 func GetPNIDByAccountID(ctx context.Context, q Querier, accountID string) (*PNID, error) {
-	return scanPNID(q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 AND NOT pnids.deleted ORDER BY pnids.shadow, pnids.pid LIMIT 1`, accountID))
+	return scanPNID(ctx, q.QueryRow(ctx, `SELECT `+pnidCols+` FROM pnids WHERE pnids.account_id=$1 AND NOT pnids.deleted ORDER BY pnids.shadow, pnids.pid LIMIT 1`, accountID))
 }
 
 // GetServerByGameServerIDAnyMode resolves a server regardless of access mode

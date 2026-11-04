@@ -6,6 +6,16 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.17.0 — 2026-11-04
+
+- The Mii belongs to the account (card #123). PUT `@me/miis/@primary` and the settings applet store the console's Mii
+  in the account core (`Mii.PutMii`, Ver3), where the Wii and the Switch read the same one; every PNID this adapter
+  loads carries the core Mii (profile, owner, miis, account.v2 `GetUserData`, emulator surface). Without a core Mii the
+  upstream "Default" placeholder is shown but never stored. A Mii the core cannot take (unreadable, or core
+  unreachable) stays in `pnids.mii_data` as a landing place and moves across on the next read. Startup migration moves
+  every existing `pnids.mii_data` into the core once, leaving accounts that already have a core Mii alone. Needs
+  account core v0.20.0 and account-api v0.2.0.
+
 ## v0.16.4 — 2026-11-04
 
 - PUT `@me/miis/@primary` reads the console's XML body (`<mii><name/><primary/><data/></mii>`); it read form fields

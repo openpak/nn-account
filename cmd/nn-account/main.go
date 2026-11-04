@@ -28,6 +28,7 @@ import (
 	"openpak/nn-account/internal/emulator"
 	"openpak/nn-account/internal/eraseapi"
 	"openpak/nn-account/internal/grpcv2"
+	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/resolution"
@@ -63,6 +64,13 @@ func run() error {
 		return err
 	}
 	defer core.Close()
+	miicore.Install(core, pool)
+	go func() {
+		mctx, mcancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer mcancel()
+		moved, kept := miicore.MigrateAll(mctx, core, pool)
+		log.Printf("miicore: startup migration moved %d Miis into the core, %d already there", moved, kept)
+	}()
 
 	// Pretendo-compatible account gRPC v2.
 	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcv2.Interceptor(cfg.GRPCAPIKey)))
