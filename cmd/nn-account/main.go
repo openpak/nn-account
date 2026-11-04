@@ -26,6 +26,7 @@ import (
 	"openpak/nn-account/internal/config"
 	"openpak/nn-account/internal/coreclient"
 	"openpak/nn-account/internal/emulator"
+	"openpak/nn-account/internal/eraseapi"
 	"openpak/nn-account/internal/grpcv2"
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
@@ -84,6 +85,9 @@ func run() error {
 	mux.Handle("/", nas)
 	mux.Handle("/ac", nascSrv)
 	mux.Handle("/ac/", nascSrv)
+	// Account erasure (card #120): its own key, so it works with or without the
+	// website surface below. No ACCOUNT_ERASE_KEY = 503.
+	mux.Handle("DELETE /internal/accounts/{account_id}/data", eraseapi.New(os.Getenv("ACCOUNT_ERASE_KEY"), pool, core))
 	if cfg.InternalKey != "" {
 		// Longest pattern wins: the resolve facade sits beside the emulator
 		// surface under the one internal key.
@@ -167,6 +171,11 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 				}
 				if applyErr == nil && ev.GetType() == "account_deleted" {
 					applyErr = store.ReleaseDeletedHandle(ctx, pool, ev.GetAccountId())
+					if applyErr == nil {
+						// Backstop for the finaliser's call; the core's links are gone by now,
+						// so only the PNID table decides the PIDs.
+						_, applyErr = eraseapi.Erase(ctx, pool, nil, ev.GetAccountId())
+					}
 				}
 			case "link_unlinked":
 				var pid int64

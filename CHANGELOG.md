@@ -6,6 +6,20 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.16.0 — 2026-11-04
+
+- Account erasure (card openpak/prds#120). `DELETE /internal/accounts/{account_id}/data` on the HTTP port (8001
+  by default), `Authorization: Bearer <ACCOUNT_ERASE_KEY>`; 503 without the env var. In one transaction, for every
+  PID of the account (its PNID rows plus the PIDs on its core links): OAuth, service, NEX and basic-auth tokens,
+  NEX accounts (password, friend code), devices only that account used (serial, MAC hash, cert hash; a device
+  shared with another PID just loses this PID). The PNID row is **kept but anonymised** (name `deleted-<pid>`,
+  no Mii, no password cache, no profile fields, owner = the nil UUID, deleted) so the PID is never reissued.
+  Idempotent; logs `account erased account=<uuid> rows=<n> service=nn-account`.
+- `account_deleted` runs the same erase after releasing the handle (PNID table only; the core links are gone).
+- Order matters: nn-account is the PID resolver for nn-friends and nn-juxtaposition, so the website must erase it
+  **last** (after `nn-friends` and `nn-juxtaposition`).
+- account-api v0.1.1.
+
 ## v0.15.0 — 2026-11-03
 - Every Pretendo NNAS route the Go server lacked, for a real console linking an existing NNID: `GET /v1/api/miis`, `GET` and `PUT /v1/api/people/@me/emails[/@primary]`, `PUT /v1/api/people/@me`, and `/v1/api/support/{forgotten_password/{pid},resend_confirmation,send_confirmation/pin/{email},email_confirmation/{pid}/{code}}`.
 - `validate/email` is registered as POST (Pretendo's method); GET stays.

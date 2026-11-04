@@ -265,3 +265,21 @@ func (c *Client) CheckHandle(ctx context.Context, handle string) (*accountv1.Che
 	defer cancel()
 	return c.ident.CheckHandle(rctx, &accountv1.CheckHandleRequest{Handle: handle})
 }
+
+// ListLinkSubjects is the subject id (the PID) of every Wii U and 3DS link the
+// account still has in the core.
+func (c *Client) ListLinkSubjects(ctx context.Context, accountID string) ([]string, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	resp, err := c.links.ListAccountLinks(rctx, &accountv1.ListAccountLinksRequest{AccountId: accountID})
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, l := range resp.GetLinks() {
+		if l.GetNamespace() == "wiiu" || l.GetNamespace() == "3ds" {
+			out = append(out, l.GetSubjectId())
+		}
+	}
+	return out, nil
+}
