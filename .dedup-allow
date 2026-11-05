@@ -8,3 +8,4 @@ pnids.timezone_name  # NNAS account XML field; cache of the core timezone, watch
 pnids.mii_name  # NNAS Mii block name; cache of the core Mii, watched by openpak-dedup-check
 pnids.mii_hash  # random id of the NNAS Mii block; not Mii data (the Mii lives only in the account core)
 pnids.gender  # per-network console field, not in the core (owner decision, data-duplication-audit decision 1)
+pnids.mii_data  # historical: created by migration 0001 and dropped by 0009 (pnids never holds a Mii; the lint reads migrations in order of file, not their effect); the nightly dedup-check fails if the column exists
