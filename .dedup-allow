@@ -1,0 +1,11 @@
+# Identity-looking columns this adapter is allowed to keep. Checked in CI by openpak/.github scripts/dedup-lint.py.
+# One entry per line: table.column  # reason. Every entry needs a reason. Caches are also watched nightly by
+# openpak-dedup-check (md5 compare against the account core, board card openpak/prds#131).
+pnids.username  # NNID the console typed at registration, required by the NNAS wire protocol; equals the core handle (docs/handles.md); cache watched by openpak-dedup-check
+pnids.country  # NNAS account XML field; cache of the core country, watched by openpak-dedup-check
+pnids.language  # NNAS account XML field; cache of the core language, watched by openpak-dedup-check
+pnids.timezone_name  # NNAS account XML field; cache of the core timezone, watched by openpak-dedup-check
+pnids.mii_name  # NNAS Mii block name; cache of the core Mii, watched by openpak-dedup-check
+pnids.mii_data  # Mii landing place for Wii U sign-in; cleared when the core adopts it, watched by openpak-dedup-check (known: pending adoptions)
+pnids.mii_hash  # hash of mii_data for the NNAS Mii block; derived, not a second copy
+pnids.gender  # per-network console field, not in the core (owner decision, data-duplication-audit decision 1)
