@@ -69,12 +69,7 @@ func run() error {
 	profiles := profilecore.New(core)
 	profilecore.Install(profiles)
 	go profileMigrationLoop(ctx, profiles, pool)
-	go func() {
-		mctx, mcancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer mcancel()
-		moved, kept := miicore.MigrateAll(mctx, core, pool)
-		log.Printf("miicore: startup migration moved %d Miis into the core, %d already there", moved, kept)
-	}()
+	go miicore.RetryLoop(ctx, core, pool)
 
 	// Pretendo-compatible account gRPC v2.
 	grpcSrv := grpc.NewServer(grpc.ChainUnaryInterceptor(grpcv2.Interceptor(cfg.GRPCAPIKey)))

@@ -143,8 +143,8 @@ func (s *Server) Ensure(ctx context.Context, ns, accountID string) (*Identity, e
 		}
 	}
 	id := &Identity{AccountID: accountID, PID: pnid.PID, Username: pnid.Username, NEXPassword: nex.Password,
-		MiiName: store.ProfileName(acct.GetDisplayName()), MiiData: pnid.MiiData, DeviceType: nex.DeviceType, PasswordCache: cache,
-		Country: pnid.Country, Language: pnid.Language}
+		MiiName: store.ProfileName(acct.GetDisplayName()), MiiData: orDefault(pnid.MiiData, defaultMiiData), DeviceType: nex.DeviceType, PasswordCache: cache,
+		Country: orDefault(pnid.Country, "US"), Language: orDefault(pnid.Language, "en")}
 	if ns == "3ds" {
 		id.FriendCode = nasc.FriendCodeForPID(pnid.PID)
 	}
@@ -195,7 +195,7 @@ func (s *Server) mint(ctx context.Context, ns string, acct *accountv1.GetAccount
 		miiName = "OpenPak"
 	}
 	p := &store.PNID{PID: pid, AccountID: acct.GetAccountId(), ServerAccessLevel: "prod", MiiName: miiName,
-		MiiData: defaultMiiData, Country: "US", Language: "en", Region: 1, TimezoneName: "EST5EDT"}
+		Region: 1}
 	candidates := []string{nnid(acct.GetDisplayName()), "op" + strconv.FormatInt(pid, 10)}
 	if acct.GetHandle() != "" {
 		candidates = []string{acct.GetHandle()}
@@ -259,4 +259,11 @@ func nnid(name string) string {
 		return ""
 	}
 	return b.String()
+}
+
+func orDefault(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
 }

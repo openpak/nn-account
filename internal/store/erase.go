@@ -60,6 +60,7 @@ func EraseAccount(ctx context.Context, pool *pgxpool.Pool, accountID string, ext
 			`DELETE FROM independent_service_tokens WHERE pid = ANY($1)`,
 			`DELETE FROM nex_tokens WHERE pid = ANY($1)`,
 			`DELETE FROM basic_auth_cache WHERE pid = ANY($1)`,
+			`DELETE FROM pending_miis WHERE pid = ANY($1)`,
 			`DELETE FROM nex_accounts WHERE pid = ANY($1) OR owning_pid = ANY($1)`,
 			// A console only this account used goes whole (serial, MAC hash, cert hash);
 			// one shared with another PID just loses this account's PID.
@@ -71,7 +72,7 @@ func EraseAccount(ctx context.Context, pool *pgxpool.Pool, accountID string, ext
 			}
 		}
 	}
-	if err := exec(`UPDATE pnids SET username='deleted-'||pid::text, account_id=$2, mii_name='', mii_data='', mii_hash='',
+	if err := exec(`UPDATE pnids SET username='deleted-'||pid::text, account_id=$2, mii_name='', mii_hash='',
 		password_cache='', gender='', marketing_flag=false, off_device_flag=false, country='US', language='en',
 		timezone_name='EST5EDT', console_pw_mode='', deleted=true, updated_at=now() WHERE account_id=$1`, accountID, NilAccountID); err != nil {
 		return 0, err

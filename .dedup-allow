@@ -6,6 +6,5 @@ pnids.country  # NNAS account XML field; cache of the core country, watched by o
 pnids.language  # NNAS account XML field; cache of the core language, watched by openpak-dedup-check
 pnids.timezone_name  # NNAS account XML field; cache of the core timezone, watched by openpak-dedup-check
 pnids.mii_name  # NNAS Mii block name; cache of the core Mii, watched by openpak-dedup-check
-pnids.mii_data  # Mii landing place for Wii U sign-in; cleared when the core adopts it, watched by openpak-dedup-check (known: pending adoptions)
-pnids.mii_hash  # hash of mii_data for the NNAS Mii block; derived, not a second copy
+pnids.mii_hash  # random id of the NNAS Mii block; not Mii data (the Mii lives only in the account core)
 pnids.gender  # per-network console field, not in the core (owner decision, data-duplication-audit decision 1)

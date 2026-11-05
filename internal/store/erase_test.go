@@ -27,9 +27,10 @@ func TestEraseAccount(t *testing.T) {
 		`DELETE FROM devices WHERE fcdcert_hash IN ('erase-a','erase-shared')`,
 		`DELETE FROM nex_accounts WHERE pid IN (1700000001,1700000002)`,
 		`DELETE FROM pnids WHERE pid IN (1700000001,1700000002)`,
-		`INSERT INTO pnids (pid, username, account_id, mii_name, mii_data, password_cache) VALUES
-			(1700000001,'erasea1',  '` + a + `','Alice','AAAA','cafe'),
-			(1700000002,'eraseb1',  '` + b + `','Bob','BBBB','beef')`,
+		`INSERT INTO pnids (pid, username, account_id, mii_name, password_cache) VALUES
+			(1700000001,'erasea1',  '` + a + `','Alice','cafe'),
+			(1700000002,'eraseb1',  '` + b + `','Bob','beef')`,
+		`INSERT INTO pending_miis (pid, data) VALUES (1700000001,'AAAA'),(1700000002,'BBBB')`,
 		`INSERT INTO nex_accounts (pid, owning_pid, password, friend_code) VALUES (1700000001,1700000001,'x','123'),(1700000002,1700000002,'y','456')`,
 		`INSERT INTO oauth_tokens VALUES ('h1','c',1700000001,'oauth_access',0,now(),now()),('h2','c',1700000002,'oauth_access',0,now(),now())`,
 		`INSERT INTO devices (fcdcert_hash, serial, linked_pids) VALUES ('erase-a','SER1','{1700000001}'),('erase-shared','SER2','{1700000001,1700000002}')`,
@@ -49,13 +50,15 @@ func TestEraseAccount(t *testing.T) {
 			t.Fatalf("%s: got %d (%v), want %d", q, cnt, err, want)
 		}
 	}
-	check(`SELECT count(*) FROM pnids WHERE pid=1700000001 AND mii_data='' AND password_cache='' AND account_id='`+NilAccountID+`' AND deleted`, 1)
+	check(`SELECT count(*) FROM pnids WHERE pid=1700000001 AND password_cache='' AND account_id='`+NilAccountID+`' AND deleted`, 1)
 	check(`SELECT count(*) FROM nex_accounts WHERE pid=1700000001`, 0)
 	check(`SELECT count(*) FROM oauth_tokens WHERE pid=1700000001`, 0)
 	check(`SELECT count(*) FROM devices WHERE fcdcert_hash='erase-a'`, 0)
 	check(`SELECT count(*) FROM devices WHERE fcdcert_hash='erase-shared' AND linked_pids='{1700000002}'`, 1)
 	// the other account is untouched
-	check(`SELECT count(*) FROM pnids WHERE pid=1700000002 AND mii_data='BBBB' AND username='eraseb1'`, 1)
+	check(`SELECT count(*) FROM pnids WHERE pid=1700000002 AND username='eraseb1'`, 1)
+	check(`SELECT count(*) FROM pending_miis WHERE pid=1700000001`, 0)
+	check(`SELECT count(*) FROM pending_miis WHERE pid=1700000002`, 1)
 	check(`SELECT count(*) FROM nex_accounts WHERE pid=1700000002`, 1)
 	check(`SELECT count(*) FROM oauth_tokens WHERE pid=1700000002`, 1)
 	if n2, err := EraseAccount(ctx, pool, a, nil); err != nil || n2 != 0 {

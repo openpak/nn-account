@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/nnas"
 	"openpak/nn-account/internal/store"
 )
@@ -89,7 +90,7 @@ func TestAccountSettingsApplet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pnid.TimezoneName != "PST8PDT" || pnid.MiiName == "newname" || pnid.MiiData != "BBBB" {
+	if pnid.TimezoneName != "PST8PDT" || pnid.MiiName == "newname" || pnid.MiiData != "" {
 		t.Fatalf("update not applied: %+v", pnid)
 	}
 
@@ -198,7 +199,16 @@ func TestMiiImageRedirectsToStudio(t *testing.T) {
 	// Valid Ver3 Mii (mii-js generated vector): 302 to Studio.
 	const mii = "0300681098e8f8c8f3a74b1f83573bead235f8c858a80000674d4d006900690033000000000000000000000000001b2faf6704068468c720f426871af1221586b10029290260c4194d00690069003300000000000000000000000000000054de"
 	raw, _ := hex.DecodeString(mii)
-	if err := store.UpdatePNIDMii(context.Background(), pool, parseInt(t, pid), "Miiguy", base64.StdEncoding.EncodeToString(raw)); err != nil {
+	owner, err := store.GetPNIDByPID(context.Background(), pool, parseInt(t, pid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	miicore.Install(core, pool)
+	t.Cleanup(func() { store.MiiOverlay = nil })
+	if !miicore.Save(context.Background(), core, pool, parseInt(t, pid), owner.AccountID, base64.StdEncoding.EncodeToString(raw)) {
+		t.Fatal("core refused the Mii")
+	}
+	if err := store.UpdatePNIDMiiName(context.Background(), pool, parseInt(t, pid), "Miiguy"); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/mii/" + pid + "/smile_open_mouth.png", "/v1/api/account_settings/mii/" + pid + "/smile_open_mouth"} {

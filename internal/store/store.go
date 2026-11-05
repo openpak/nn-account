@@ -84,7 +84,7 @@ type PNID struct {
 	AccessLevel       int32
 	ServerAccessLevel string
 	MiiName           string
-	MiiData           string // base64 binary Mii
+	MiiData           string // base64 binary Mii: filled from the account core on load, never stored in pnids
 	MiiHash           string
 	Country           string
 	Language          string
@@ -97,7 +97,7 @@ type PNID struct {
 }
 
 const pnidCols = `pnids.pid, pnids.username, pnids.account_id, pnids.access_level, pnids.server_access_level,
-	pnids.mii_name, pnids.mii_data, pnids.mii_hash, pnids.country, pnids.language, pnids.region,
+	pnids.mii_name, pnids.mii_hash, pnids.country, pnids.language, pnids.region,
 	pnids.timezone_name, pnids.deleted, pnids.creation_date, pnids.shadow, pnids.password_cache`
 
 // MiiOverlay, when set, replaces a loaded PNID's Mii data with the account's
@@ -113,7 +113,7 @@ var ProfileOverlay func(ctx context.Context, p *PNID)
 func scanPNID(ctx context.Context, row pgx.Row) (*PNID, error) {
 	var p PNID
 	err := row.Scan(&p.PID, &p.Username, &p.AccountID, &p.AccessLevel, &p.ServerAccessLevel,
-		&p.MiiName, &p.MiiData, &p.MiiHash, &p.Country, &p.Language, &p.Region, &p.TimezoneName,
+		&p.MiiName, &p.MiiHash, &p.Country, &p.Language, &p.Region, &p.TimezoneName,
 		&p.Deleted, &p.CreationDate, &p.Shadow, &p.PasswordCache)
 	if err != nil {
 		return nil, err
@@ -166,10 +166,10 @@ func GetPNIDByBasicAuth(ctx context.Context, q Querier, base64Token string) (*PN
 // InsertPNID creates a PNID; PID uniqueness is retried by callers.
 func InsertPNID(ctx context.Context, q Querier, p *PNID) error {
 	_, err := q.Exec(ctx, `INSERT INTO pnids (pid, username, account_id, access_level, server_access_level,
-		mii_name, mii_data, mii_hash, country, language, region, timezone_name, shadow, password_cache)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+		mii_name, mii_hash, country, language, region, timezone_name, shadow, password_cache)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 		p.PID, p.Username, p.AccountID, p.AccessLevel, p.ServerAccessLevel,
-		p.MiiName, p.MiiData, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName, p.Shadow, p.PasswordCache)
+		p.MiiName, p.MiiHash, p.Country, p.Language, p.Region, p.TimezoneName, p.Shadow, p.PasswordCache)
 	return err
 }
 
@@ -194,9 +194,9 @@ func SetConsolePasswordCredential(ctx context.Context, q Querier, pid int64, hex
 	return err
 }
 
-func UpdatePNIDProfile(ctx context.Context, q Querier, pid int64, miiName, miiData, country, language, timezone string) error {
-	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, mii_data=$3, country=$4, language=$5, timezone_name=$6,
-		updated_at=now() WHERE pid=$1`, pid, miiName, miiData, country, language, timezone)
+func UpdatePNIDProfile(ctx context.Context, q Querier, pid int64, miiName, country, language, timezone string) error {
+	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, country=$3, language=$4, timezone_name=$5,
+		updated_at=now() WHERE pid=$1`, pid, miiName, country, language, timezone)
 	return err
 }
 
@@ -519,13 +519,6 @@ func PIDsForAccount(ctx context.Context, pool *pgxpool.Pool, accountID string) (
 		out = append(out, pid)
 	}
 	return out, rows.Err()
-}
-
-// UpdatePNIDMii persists Mii name/data (Nintendo-specific profile asset).
-func UpdatePNIDMii(ctx context.Context, q Querier, pid int64, miiName, miiData string) error {
-	_, err := q.Exec(ctx, `UPDATE pnids SET mii_name=$2, mii_data=$3, updated_at=now() WHERE pid=$1`,
-		pid, miiName, miiData)
-	return err
 }
 
 // UpdatePNIDMiiName persists the Mii's name. The Mii data itself is the

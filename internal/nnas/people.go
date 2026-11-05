@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/store"
 )
 
@@ -120,8 +121,8 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 	pnid := &store.PNID{
 		PID: pid, Username: userID, AccountID: accountID,
 		AccessLevel: 0, ServerAccessLevel: "prod",
-		MiiName: store.ProfileName(userID), MiiData: miiData, MiiHash: randomHex(7),
-		Country: defaultStr(country, "US"), Language: strings.TrimSpace(language),
+		MiiName: store.ProfileName(userID), MiiHash: randomHex(7),
+		Country: strings.ToUpper(strings.TrimSpace(country)), Language: strings.TrimSpace(language),
 		Region: defaultInt(region, 1), TimezoneName: strings.TrimSpace(timezoneName),
 		PasswordCache: cacheHex,
 	}
@@ -151,6 +152,12 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[POST] /v1/api/people: insert failed: %v", err)
 		writeXMLErr(w, http.StatusBadRequest, "Bad Request", "1600", "Unable to process request")
 		return
+	}
+
+	// The Mii the console registered with belongs to the account: it goes to the core (queued if the
+	// core is down). The "Default" placeholder is nobody's Mii and is never stored.
+	if m := strings.Join(strings.Fields(miiData), ""); m != "" && m != miicore.DefaultMiiData {
+		miicore.Save(ctx, s.core, s.pool, pid, accountID, m)
 	}
 
 	// Publish the NNID on the link so the website and the app can show it and
@@ -284,13 +291,6 @@ func (s *Server) parsePersonBody(w http.ResponseWriter, r *http.Request) (userID
 	return r.FormValue("user_id"), r.FormValue("password"), strings.ToLower(r.FormValue("email.address")),
 		r.FormValue("mii.name"), r.FormValue("mii.data"), r.FormValue("country"),
 		r.FormValue("language"), r.FormValue("tz_name"), r.FormValue("region"), nil
-}
-
-func defaultStr(v, def string) string {
-	if strings.TrimSpace(v) == "" {
-		return def
-	}
-	return v
 }
 
 func defaultInt(v string, def int32) int32 {

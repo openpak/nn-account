@@ -1,7 +1,9 @@
 // Package miicore moves the Wii U / 3DS Mii between this adapter and the
 // account core. The Mii belongs to the account and is shared by the Wii, the
-// Wii U / 3DS and the Switch, so it lives in the core; the pnids.mii_data
-// column is only a landing place for data the core could not take yet.
+// Wii U / 3DS and the Switch, so it lives in the core and pnids holds none
+// (card #131). An upload the core could not take yet waits in the pending_miis
+// queue, one row per PNID, until Retry has delivered it; the queue is empty in
+// normal operation and the nightly dedup-check flags a row older than an hour.
 package miicore
 
 import (
@@ -10,6 +12,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
@@ -25,52 +28,35 @@ const DefaultMiiData = "AwAAQOlVognnx0GC2/uogAOzuI0n2QAAAEBEAGUAZgBhAHUAbAB0AAAA
 
 func clean(b64 string) string { return strings.Join(strings.Fields(b64), "") }
 
-// Install makes every PNID this process loads carry the account's core Mii.
-// A Mii still sitting in pnids.mii_data (uploaded while the core was
-// unreachable, or from before the core held Miis) is moved into the core the
-// first time it is seen, and cleared locally once the core has it.
+// Install makes every PNID this process loads carry the account's core Mii:
+// the core's, else a queued upload that has not reached it yet, else the
+// placeholder.
 func Install(core *coreclient.Client, pool *pgxpool.Pool) {
 	store.MiiOverlay = func(ctx context.Context, p *store.PNID) {
 		raw, err := core.GetMii(ctx, p.AccountID)
-		switch {
-		case err == nil:
+		if err == nil {
 			p.MiiData = base64.StdEncoding.EncodeToString(raw)
-		case errors.Is(err, coreclient.ErrNoMii):
-			if legacy := clean(p.MiiData); legacy != "" && legacy != DefaultMiiData {
-				if Adopt(ctx, core, pool, p.PID, p.AccountID, legacy) {
-					return
-				}
-			}
-			if clean(p.MiiData) == "" {
-				p.MiiData = DefaultMiiData
-			}
-		default:
-			// Core unreachable: serve what this adapter holds rather than fail the sign-in.
-			log.Printf("miicore: read Mii of pid %d: %v", p.PID, err)
-			if clean(p.MiiData) == "" {
-				p.MiiData = DefaultMiiData
-			}
+			return
 		}
+		if !errors.Is(err, coreclient.ErrNoMii) {
+			// Core unreachable: serve what is queued, else the placeholder, rather than fail the sign-in.
+			log.Printf("miicore: read Mii of pid %d: %v", p.PID, err)
+		}
+		var queued string
+		if pool.QueryRow(ctx, `SELECT data FROM pending_miis WHERE pid=$1`, p.PID).Scan(&queued) == nil && clean(queued) != "" {
+			p.MiiData = clean(queued)
+			return
+		}
+		p.MiiData = DefaultMiiData
 	}
 }
 
-// Save stores an uploaded Mii (base64 Ver3) as the account's Mii. When the core
-// refuses the data (unreadable Mii) or is unreachable, the upload is kept in
-// pnids.mii_data so nothing is lost; Save reports whether the core has it.
+// Save stores an uploaded Mii (base64 Ver3) as the account's Mii and reports
+// whether the core has it. A core outage queues the upload in pending_miis so
+// Retry delivers it; data the core refuses as unreadable is dropped (retrying
+// can never help).
 func Save(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool, pid int64, accountID, b64 string) (inCore bool) {
 	b64 = clean(b64)
-	if Adopt(ctx, core, pool, pid, accountID, b64) {
-		return true
-	}
-	if _, err := pool.Exec(ctx, `UPDATE pnids SET mii_data=$2, updated_at=now() WHERE pid=$1`, pid, b64); err != nil {
-		log.Printf("miicore: keep Mii of pid %d locally: %v", pid, err)
-	}
-	return false
-}
-
-// Adopt writes b64 into the core and clears the adapter's local copy. It
-// returns false (and changes nothing locally) if the core did not take it.
-func Adopt(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool, pid int64, accountID, b64 string) bool {
 	raw, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		log.Printf("miicore: pid %d Mii is not base64: %v", pid, err)
@@ -79,48 +65,77 @@ func Adopt(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool, pid
 	if _, err := core.PutMii(ctx, accountID, raw); err != nil {
 		if status.Code(err) == codes.InvalidArgument {
 			log.Printf("miicore: core rejected the Mii of pid %d: %v", pid, err)
-		} else {
-			log.Printf("miicore: store Mii of pid %d: %v", pid, err)
+			return false
+		}
+		log.Printf("miicore: store Mii of pid %d, queued for retry: %v", pid, err)
+		if _, qerr := pool.Exec(ctx, `INSERT INTO pending_miis (pid, data) VALUES ($1,$2)
+			ON CONFLICT (pid) DO UPDATE SET data=EXCLUDED.data, attempts=0, created_at=now()`, pid, b64); qerr != nil {
+			log.Printf("miicore: queue Mii of pid %d: %v", pid, qerr)
 		}
 		return false
 	}
-	if _, err := pool.Exec(ctx, `UPDATE pnids SET mii_data='', updated_at=now() WHERE pid=$1`, pid); err != nil {
-		log.Printf("miicore: clear local Mii of pid %d: %v", pid, err)
+	// The core has the newest upload: an older queued one must not overwrite it later.
+	if _, err := pool.Exec(ctx, `DELETE FROM pending_miis WHERE pid=$1`, pid); err != nil {
+		log.Printf("miicore: clear queue of pid %d: %v", pid, err)
 	}
 	return true
 }
 
-// MigrateAll moves every Mii still held in pnids.mii_data into the core, once
-// at startup. Accounts whose core Mii already exists are left alone (the core
-// copy may have been changed on another console since).
-func MigrateAll(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool) (moved, kept int) {
-	rows, err := pool.Query(ctx, `SELECT pid, account_id::text, mii_data FROM pnids WHERE mii_data <> '' AND mii_data <> $1 AND NOT deleted AND account_id IS NOT NULL`, DefaultMiiData)
+// Retry delivers every queued upload to the core. A delivered or unreadable
+// row is deleted (only if it is still the row read, so a newer upload stays).
+func Retry(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool) (sent, dropped int) {
+	rows, err := pool.Query(ctx, `SELECT q.pid, p.account_id::text, q.data FROM pending_miis q
+		JOIN pnids p ON p.pid=q.pid WHERE NOT p.deleted AND p.account_id IS NOT NULL`)
 	if err != nil {
-		log.Printf("miicore: migration query: %v", err)
+		log.Printf("miicore: queue query: %v", err)
 		return
 	}
 	type row struct {
-		pid       int64
-		acct, mii string
+		pid        int64
+		acct, data string
 	}
 	var todo []row
 	for rows.Next() {
 		var r row
-		if rows.Scan(&r.pid, &r.acct, &r.mii) == nil {
+		if rows.Scan(&r.pid, &r.acct, &r.data) == nil {
 			todo = append(todo, r)
 		}
 	}
 	rows.Close()
 	for _, r := range todo {
-		if _, err := core.GetMii(ctx, r.acct); err == nil {
-			// The core already holds this account's Mii: it wins.
-			_, _ = pool.Exec(ctx, `UPDATE pnids SET mii_data='' WHERE pid=$1`, r.pid)
-			kept++
+		raw, err := base64.StdEncoding.DecodeString(clean(r.data))
+		if err == nil {
+			_, err = core.PutMii(ctx, r.acct, raw)
+		}
+		switch {
+		case err == nil:
+			sent++
+		case err != nil && (status.Code(err) == codes.InvalidArgument || errors.As(err, new(base64.CorruptInputError))):
+			log.Printf("miicore: dropping the queued Mii of pid %d: unreadable", r.pid)
+			dropped++
+		default:
+			log.Printf("miicore: queued Mii of pid %d still undeliverable: %v", r.pid, err)
+			_, _ = pool.Exec(ctx, `UPDATE pending_miis SET attempts=attempts+1 WHERE pid=$1`, r.pid)
 			continue
 		}
-		if Adopt(ctx, core, pool, r.pid, r.acct, clean(r.mii)) {
-			moved++
-		}
+		_, _ = pool.Exec(ctx, `DELETE FROM pending_miis WHERE pid=$1 AND data=$2`, r.pid, r.data)
 	}
 	return
+}
+
+// RetryLoop runs Retry every minute until ctx ends; it logs only when something moved.
+func RetryLoop(ctx context.Context, core *coreclient.Client, pool *pgxpool.Pool) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Minute):
+		}
+		rctx, cancel := context.WithTimeout(ctx, 50*time.Second)
+		sent, dropped := Retry(rctx, core, pool)
+		cancel()
+		if sent+dropped > 0 {
+			log.Printf("miicore: queue run: %d delivered to the core, %d dropped as unreadable", sent, dropped)
+		}
+	}
 }

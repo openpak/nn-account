@@ -6,6 +6,17 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.19.0 - 2026-11-05
+
+- Card #131 phase 10b: `pnids` never holds a Mii again. Migration 0009 drops `pnids.mii_data` (a real Mii still in it moves to the
+  queue first; the "Default" placeholder is nobody's Mii and is not moved). The Mii is read only from the account core.
+- An upload the core cannot take (core down) waits in the new `pending_miis` table, one row per PNID, and `miicore.RetryLoop`
+  delivers it every minute, then deletes the row. Sign-in serves the queued Mii meanwhile. A Mii the core refuses as unreadable
+  is dropped, not queued. Erasure deletes the queue row. The nightly dedup-check treats a queue row older than an hour as a fault.
+- Registration hands the Mii the console sent to the core (queued if needed) and no longer stores the registration default
+  country `US` (nor a placeholder Mii) in `pnids`; emulator-minted PNIDs store no country, language, time zone or Mii either
+  (the defaults are applied at presentation time, wire output unchanged). Removed `miicore.Adopt` and the startup `MigrateAll`.
+
 ## v0.18.1 - 2026-11-05
 
 - Card #131 follow-up: registration (`POST /v1/api/people`) no longer stores the defaults `en` / `EST5EDT` in `pnids`
