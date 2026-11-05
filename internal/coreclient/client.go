@@ -68,6 +68,13 @@ func (c *Client) GetAccount(ctx context.Context, accountID string) (*accountv1.G
 	return c.ident.GetAccount(rctx, &accountv1.GetAccountRequest{AccountId: accountID})
 }
 
+// UpdatePublicProfile sends the supplied profile fields (country, language, time zone, ...) to the core.
+func (c *Client) UpdatePublicProfile(ctx context.Context, req *accountv1.UpdatePublicProfileRequest) (*accountv1.GetAccountResponse, error) {
+	rctx, cancel := context.WithTimeout(c.ctx(ctx), 5*time.Second)
+	defer cancel()
+	return c.ident.UpdatePublicProfile(rctx, req)
+}
+
 // GetActiveLink returns the core link for this adapter's subject, requiring
 // state ACTIVE. Fail-closed on any error. Probes both adapter namespaces:
 // accounts register under "wiiu" via NNAS but may sign in from a 3DS.

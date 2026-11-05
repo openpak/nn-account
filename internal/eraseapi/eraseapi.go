@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"openpak/nn-account/internal/coreclient"
+	"openpak/nn-account/internal/profilecore"
 	"openpak/nn-account/internal/store"
 )
 
@@ -39,6 +40,9 @@ func Erase(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client, acc
 		}
 	}
 	n, err := store.EraseAccount(ctx, pool, accountID, extra)
+	if profilecore.Default != nil {
+		profilecore.Default.Invalidate(accountID) // no profile of an erased account stays in memory
+	}
 	if err != nil {
 		return 0, err
 	}

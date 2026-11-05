@@ -9,6 +9,7 @@ import (
 
 	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/miistudio"
+	"openpak/nn-account/internal/profilecore"
 	"openpak/nn-account/internal/store"
 )
 
@@ -87,7 +88,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request, pn
 	if miiData != "" {
 		miicore.Save(r.Context(), s.core, s.pool, pnid.PID, pnid.AccountID, miiData)
 	}
-	if err := store.UpdatePNIDSettings(r.Context(), s.pool, pnid.PID, updates); err != nil {
+	if err := profilecore.SaveUpdates(r.Context(), s.pool, pnid.AccountID, pnid.PID, updates); err != nil {
 		http.Redirect(w, r, "/v1/api/account_settings/ui/profile?notice=error", http.StatusFound)
 		return
 	}

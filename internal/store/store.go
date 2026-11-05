@@ -105,6 +105,11 @@ const pnidCols = `pnids.pid, pnids.username, pnids.account_id, pnids.access_leve
 // adapter). Set once at startup.
 var MiiOverlay func(ctx context.Context, p *PNID)
 
+// ProfileOverlay, when set, replaces a loaded PNID's NNID, account name, country,
+// language and time zone with the account core's (the profile belongs to the
+// account, not to this adapter; the columns are a fallback). Set once at startup.
+var ProfileOverlay func(ctx context.Context, p *PNID)
+
 func scanPNID(ctx context.Context, row pgx.Row) (*PNID, error) {
 	var p PNID
 	err := row.Scan(&p.PID, &p.Username, &p.AccountID, &p.AccessLevel, &p.ServerAccessLevel,
@@ -115,6 +120,9 @@ func scanPNID(ctx context.Context, row pgx.Row) (*PNID, error) {
 	}
 	if MiiOverlay != nil && !p.Deleted {
 		MiiOverlay(ctx, &p)
+	}
+	if ProfileOverlay != nil && !p.Deleted {
+		ProfileOverlay(ctx, &p)
 	}
 	return &p, nil
 }

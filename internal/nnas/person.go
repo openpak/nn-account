@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"openpak/nn-account/internal/profilecore"
 	"openpak/nn-account/internal/store"
 )
 
@@ -126,7 +127,7 @@ func (s *Server) handleUpdatePerson(w http.ResponseWriter, r *http.Request, pnid
 			return
 		}
 	}
-	if err := store.UpdatePNIDSettings(r.Context(), s.pool, pnid.PID, planPersonUpdate(p)); err != nil {
+	if err := profilecore.SaveUpdates(r.Context(), s.pool, pnid.AccountID, pnid.PID, planPersonUpdate(p)); err != nil {
 		log.Printf("[PUT] /v1/api/people/@me: update pid %d: %v", pnid.PID, err)
 		writeXMLErr(w, http.StatusInternalServerError, "", "1600", "Unable to process request")
 		return

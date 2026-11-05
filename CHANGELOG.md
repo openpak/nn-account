@@ -6,6 +6,24 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.18.0 - 2026-11-05
+
+- The profile belongs to the account (card #131). Every PNID this adapter loads carries the core's handle (NNID),
+  account name, country, language and time zone (new `profilecore` overlay, account-api v0.3.0). Cached in process for
+  5 minutes and refreshed at once by the core's `profile_updated` event (re-read, `profile_version` decides); when the
+  core is unreachable the last cached value is served, else the local column. Console edits (settings applet, PUT
+  `people/@me`: country, language, time zone) go to the core (`UpdatePublicProfile`); only if the core refuses or is down
+  do they land in the pnids columns, and a migration moves them later. Console language is the core tag's primary
+  subtag ("pt-BR" is "pt"). Mii name is the core account name; the console does not rename the account.
+- One-shot migration (startup, then every 10 minutes while anything is pending; one log line with counts): pushes a
+  local language and time zone to the core only where the core has none, then empties the local `mii_name`, `country`,
+  `language`, `timezone_name` after a verified read-back of the core account. Country is never pushed: pnids.country
+  was the registration default ("US"), the core's ISO-2 value is the player's. Both are ISO-2, no conversion needed.
+  Miis keep moving through `miicore` (the 22 remaining pnids Miis are the "Default" placeholder, never stored).
+- Stays local: `pnids.username` (the NNID sign-in lookup key; equals the core handle, overlay shows the handle), pid,
+  account_id, NEX credentials and tokens, access levels, gender, flags, console_pw_mode, password_cache, shadow, region.
+- Erasure still covers every remaining row, and drops the in-memory profile.
+
 ## v0.17.0 — 2026-11-04
 
 - The Mii belongs to the account (card #123). PUT `@me/miis/@primary` and the settings applet store the console's Mii

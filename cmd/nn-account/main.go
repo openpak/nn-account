@@ -31,6 +31,7 @@ import (
 	"openpak/nn-account/internal/miicore"
 	"openpak/nn-account/internal/nasc"
 	"openpak/nn-account/internal/nnas"
+	"openpak/nn-account/internal/profilecore"
 	"openpak/nn-account/internal/resolution"
 	"openpak/nn-account/internal/resolvehttp"
 	"openpak/nn-account/internal/store"
@@ -65,6 +66,9 @@ func run() error {
 	}
 	defer core.Close()
 	miicore.Install(core, pool)
+	profiles := profilecore.New(core)
+	profilecore.Install(profiles)
+	go profileMigrationLoop(ctx, profiles, pool)
 	go func() {
 		mctx, mcancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer mcancel()
@@ -120,7 +124,7 @@ func run() error {
 
 	// Durable invalidation event consumer: core bans/unlinks/deletions revoke
 	// local tokens (PRD §7 consistency rules).
-	go eventLoop(ctx, pool, core)
+	go eventLoop(ctx, pool, core, profiles)
 	// Accounts made before NNIDs were published on their links, and any
 	// registration whose publish failed, get theirs now. Idempotent.
 	go publishNNIDs(ctx, pool, core)
@@ -145,7 +149,7 @@ func run() error {
 
 // eventLoop polls core invalidation events and applies them locally with
 // dedup via the processed_events row (PRD §7: dedup + version ordering).
-func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client) {
+func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client, profiles *profilecore.Cache) {
 	for {
 		version, err := store.GetProcessedEventVersion(ctx, pool)
 		if err != nil {
@@ -178,6 +182,7 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 					}
 				}
 				if applyErr == nil && ev.GetType() == "account_deleted" {
+					profiles.Invalidate(ev.GetAccountId())
 					applyErr = store.ReleaseDeletedHandle(ctx, pool, ev.GetAccountId())
 					if applyErr == nil {
 						// Backstop for the finaliser's call; the core's links are gone by now,
@@ -192,6 +197,10 @@ func eventLoop(ctx context.Context, pool *pgxpool.Pool, core *coreclient.Client)
 				if relevant && applyErr == nil {
 					applyErr = store.RevokeTokensForPID(ctx, pool, pid)
 				}
+			case "profile_updated":
+				// The core's profile changed: re-read it (profile_version decides) so a rename or
+				// a new language shows on the next console request, not after the cache TTL.
+				profiles.Refresh(ctx, ev.GetAccountId())
 			case "account_unbanned", "account_restored":
 				// Nothing to re-arm locally: revoked tokens stay revoked and
 				// the owner signs in again. A closed account keeps its NNID
@@ -308,4 +317,26 @@ func miiFallbackBase(cfg *config.Config) string {
 		return "https://" + cfg.NNASDomain
 	}
 	return cfg.CDNBaseURL
+}
+
+// profileMigrationLoop moves the profile fields still held in pnids into the core: once at
+// startup (always logged, counts only), then every ten minutes for edits that landed locally
+// while the core was down (logged only when something moved).
+func profileMigrationLoop(ctx context.Context, profiles *profilecore.Cache, pool *pgxpool.Pool) {
+	first := true
+	for {
+		mctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		st, err := profiles.Migrate(mctx, pool)
+		cancel()
+		if err != nil {
+			log.Printf("profilecore: migration: %v", err)
+		} else if first || st.Pushed > 0 || st.Cleared > 0 {
+			log.Printf("profilecore: migration run: %d pnids with local profile data, %d pushed to the core, %d cleared locally", st.Rows, st.Pushed, st.Cleared)
+		}
+		first = false
+		sleepCtx(ctx, 10*time.Minute)
+		if ctx.Err() != nil {
+			return
+		}
+	}
 }
