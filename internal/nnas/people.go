@@ -121,8 +121,8 @@ func (s *Server) handleRegisterPerson(w http.ResponseWriter, r *http.Request) {
 		PID: pid, Username: userID, AccountID: accountID,
 		AccessLevel: 0, ServerAccessLevel: "prod",
 		MiiName: store.ProfileName(userID), MiiData: miiData, MiiHash: randomHex(7),
-		Country: defaultStr(country, "US"), Language: defaultStr(language, "en"),
-		Region: defaultInt(region, 1), TimezoneName: defaultStr(timezoneName, "EST5EDT"),
+		Country: defaultStr(country, "US"), Language: strings.TrimSpace(language),
+		Region: defaultInt(region, 1), TimezoneName: strings.TrimSpace(timezoneName),
 		PasswordCache: cacheHex,
 	}
 	ctx := r.Context()

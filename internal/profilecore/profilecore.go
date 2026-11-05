@@ -280,11 +280,14 @@ func (c *Cache) Migrate(ctx context.Context, pool *pgxpool.Pool) (MigrateStats, 
 		}
 		req := &accountv1.UpdatePublicProfileRequest{AccountId: r.acct}
 		push := false
-		if a.GetLanguage() == "" && r.language != "" {
+		// The exact default pair is what older registrations stored when the
+		// console sent nothing: it is not a choice, never push it.
+		defPair := r.language == DefaultLanguage && r.timezone == DefaultTimezone
+		if !defPair && a.GetLanguage() == "" && r.language != "" {
 			req.Language = &r.language
 			push = true
 		}
-		if a.GetTimezone() == "" && r.timezone != "" {
+		if !defPair && a.GetTimezone() == "" && r.timezone != "" {
 			req.Timezone = &r.timezone
 			push = true
 		}
@@ -308,10 +311,10 @@ func (c *Cache) Migrate(ctx context.Context, pool *pgxpool.Pool) (MigrateStats, 
 		if b.GetCountry() != "" && r.country != "" {
 			sets = append(sets, "country=''")
 		}
-		if b.GetLanguage() != "" && r.language != "" {
+		if (defPair || b.GetLanguage() != "") && r.language != "" {
 			sets = append(sets, "language=''")
 		}
-		if b.GetTimezone() != "" && r.timezone != "" {
+		if (defPair || b.GetTimezone() != "") && r.timezone != "" {
 			sets = append(sets, "timezone_name=''")
 		}
 		if len(sets) == 0 {

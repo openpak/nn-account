@@ -6,6 +6,14 @@ of truth; this file is the readable summary.
 Note: the early history below is the upstream project (Pretendo Juxt-Server etc.);
 OpenPak work starts at the port/fork commit.
 
+## v0.18.1 - 2026-11-05
+
+- Card #131 follow-up: registration (`POST /v1/api/people`) no longer stores the defaults `en` / `EST5EDT` in `pnids`
+  when the console sends no language or time zone; it stores empty and the default is applied at presentation time only
+  (wire output unchanged). The profile backfill (`Migrate`) treats the exact pair `en` + `EST5EDT` in existing rows as
+  "not chosen": never pushes it to the core and clears the local copies. Real choices (including a real `en` with a
+  real zone) are still pushed; non-empty core values are never overwritten.
+
 ## v0.18.0 - 2026-11-05
 
 - The profile belongs to the account (card #131). Every PNID this adapter loads carries the core's handle (NNID),

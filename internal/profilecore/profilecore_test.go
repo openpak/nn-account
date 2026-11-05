@@ -138,6 +138,15 @@ func TestConsoleLanguage(t *testing.T) {
 }
 
 // Needs a Postgres (NN_ACCOUNT_TEST_DATABASE_URL); skipped without one.
+func TestApplyPresentsDefaultsForEmptyLocal(t *testing.T) {
+	c := New(&fakeCore{acct: map[string]*accountv1.GetAccountResponse{}})
+	p := &store.PNID{PID: 1, Language: "", TimezoneName: ""}
+	c.Apply(context.Background(), p)
+	if p.Language != "en" || p.TimezoneName != "EST5EDT" {
+		t.Fatalf("defaults not presented: %q %q", p.Language, p.TimezoneName)
+	}
+}
+
 func TestMigrate(t *testing.T) {
 	url := os.Getenv("NN_ACCOUNT_TEST_DATABASE_URL")
 	if url == "" {
@@ -154,15 +163,21 @@ func TestMigrate(t *testing.T) {
 	}
 	const a1 = "bbbbbbbb-0000-0000-0000-000000000001"
 	const a2 = "bbbbbbbb-0000-0000-0000-000000000002"
+	const a3 = "bbbbbbbb-0000-0000-0000-000000000003"
+	const a4 = "bbbbbbbb-0000-0000-0000-000000000004"
 	f := &fakeCore{acct: map[string]*accountv1.GetAccountResponse{
-		a1: {Handle: "mig1", DisplayName: "Mig One", Country: "GB", Language: "", Timezone: ""},
-		a2: {Handle: "mig2", DisplayName: "Mig Two", Country: "", Language: "fr", Timezone: "Europe/Paris"},
+		a1: {Handle: "mig1", DisplayName: "Mig One", Country: "GB"},
+		a2: {Handle: "mig2", DisplayName: "Mig Two", Language: "fr", Timezone: "Europe/Paris"},
+		a3: {Handle: "mig3", DisplayName: "Mig Three"},
+		a4: {Handle: "mig4", DisplayName: "Mig Four"},
 	}}
 	for _, s := range []string{
-		`DELETE FROM pnids WHERE pid IN (1700000011,1700000012)`,
+		`DELETE FROM pnids WHERE pid IN (1700000011,1700000012,1700000013,1700000014)`,
 		`INSERT INTO pnids (pid, username, account_id, mii_name, country, language, timezone_name, password_cache, gender) VALUES
 			(1700000011,'mig1','` + a1 + `','Mig One','US','en','EST5EDT','cafe','M'),
-			(1700000012,'mig2','` + a2 + `','Mig Two','US','en','EST5EDT','beef','F')`,
+			(1700000012,'mig2','` + a2 + `','Mig Two','US','en','EST5EDT','beef','F'),
+			(1700000013,'mig3','` + a3 + `','Mig Three','US','de','Europe/Berlin','f00d','M'),
+			(1700000014,'mig4','` + a4 + `','Mig Four','US','en','Europe/Lisbon','d00d','M')`,
 	} {
 		if _, err := pool.Exec(ctx, s); err != nil {
 			t.Fatalf("%s: %v", s, err)
@@ -174,13 +189,20 @@ func TestMigrate(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// a1: core was empty for language/timezone -> backfilled, never over a value; core country GB kept
-	if f.acct[a1].Language != "en" || f.acct[a1].Timezone != "EST5EDT" || f.acct[a1].Country != "GB" {
-		t.Fatalf("a1 core: %+v", f.acct[a1])
+	// a1: default pair is not a choice: core stays empty, local cleared
+	if f.acct[a1].Language != "" || f.acct[a1].Timezone != "" || f.acct[a1].Country != "GB" {
+		t.Fatalf("a1 core got defaults: %+v", f.acct[a1])
 	}
-	// a2: core values untouched, country empty in core -> local country stays
+	// a2: core values untouched
 	if f.acct[a2].Language != "fr" || f.acct[a2].Timezone != "Europe/Paris" {
 		t.Fatalf("a2 core overwritten: %+v", f.acct[a2])
+	}
+	// a3, a4: real choices are pushed (a4 is a real 'en' with a real zone)
+	if f.acct[a3].Language != "de" || f.acct[a3].Timezone != "Europe/Berlin" {
+		t.Fatalf("a3 not pushed: %+v", f.acct[a3])
+	}
+	if f.acct[a4].Language != "en" || f.acct[a4].Timezone != "Europe/Lisbon" {
+		t.Fatalf("a4 not pushed: %+v", f.acct[a4])
 	}
 	var n int
 	q := func(sql string, want int) {
@@ -191,5 +213,6 @@ func TestMigrate(t *testing.T) {
 	}
 	q(`SELECT count(*) FROM pnids WHERE pid=1700000011 AND country='' AND language='' AND timezone_name='' AND mii_name='' AND username='mig1' AND password_cache='cafe' AND gender='M'`, 1)
 	q(`SELECT count(*) FROM pnids WHERE pid=1700000012 AND country='US' AND language='' AND timezone_name='' AND mii_name='' AND password_cache='beef' AND gender='F'`, 1)
-	pool.Exec(ctx, `DELETE FROM pnids WHERE pid IN (1700000011,1700000012)`)
+	q(`SELECT count(*) FROM pnids WHERE pid IN (1700000013,1700000014) AND language='' AND timezone_name=''`, 2)
+	pool.Exec(ctx, `DELETE FROM pnids WHERE pid IN (1700000011,1700000012,1700000013,1700000014)`)
 }
